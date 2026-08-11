@@ -9,7 +9,13 @@
    * - Escape key dismisses via oncancel
    * - Focus is trapped between Cancel and confirm buttons
    */
-  let { message = 'Are you sure?', confirmLabel = 'Delete', onconfirm, oncancel } = $props()
+  let {
+    message = "Are you sure?",
+    confirmLabel = "Delete",
+    onconfirm,
+    oncancel,
+    position = "bottom" // Thêm mặc định mọc xuống dưới
+  } = $props();
 
   let cancelButtonRef = $state(null)
 
@@ -40,11 +46,10 @@
 </script>
 
 <div
-  class="absolute bottom-full left-0 mb-2 z-[60] w-56 bg-white border border-gray-200 rounded-lg shadow-lg p-3"
+  class="absolute {position === 'bottom' ? 'top-full mt-2 right-0' : 'bottom-full mb-2 left-0'} z-[60] w-56 bg-white border border-gray-200 rounded-lg shadow-lg p-3"
   data-testid="confirm-popover"
   role="alertdialog"
   aria-labelledby="confirm-popover-message"
-  onkeydown={handleKeydown}
 >
   <p id="confirm-popover-message" class="text-sm text-gray-700 mb-3">{message}</p>
   <div class="flex gap-2 justify-end">

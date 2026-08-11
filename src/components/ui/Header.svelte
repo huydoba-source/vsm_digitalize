@@ -173,8 +173,8 @@
       </button>
     {/if}
     <div class="flex items-center gap-2">
-      <img src="/norn.svg" alt="Norn" class="h-7 w-7 rounded-md" />
-      <span class="hidden sm:inline font-semibold text-gray-700">Norn</span>
+      <img src="https://i.logos-download.com/8838/2046-05803472c5828be1066b786bd79c64c8.png/Decathlon_Logo_2024.png" alt="Decathlon" class="h-6 w-auto"/>
+      <span class="hidden sm:inline font-bold text-[#0082C3]">VSM</span>
     </div>
     <div class="h-6 w-px bg-gray-300"></div>
     {#if isEditingName}
@@ -256,7 +256,7 @@
         aria-haspopup="menu"
         aria-expanded={isExportOpen}
         aria-label="Export options"
-        class="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+        class="px-3 py-1.5 text-sm bg-[#0082C3] text-white rounded hover:bg-[#0068A3] transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
         data-testid="export-button"
       >
         Export

@@ -57,17 +57,10 @@
 <div class="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-8">
   <div class="max-w-lg w-full">
     <div class="text-center mb-8">
-      <img
-        src="/norn.svg"
-        alt="Norn"
-        class="mx-auto mb-4 h-20 w-20 rounded-2xl shadow-lg"
-      />
-      <h1 class="text-3xl font-bold text-gray-800 mb-2">Norn</h1>
-      <p class="text-lg font-medium text-gray-700">Weave the work into flow.</p>
-      <p class="mt-1 text-gray-600">
-        Map your software delivery value stream and find the bottleneck — every
-        thread, end to end.
-      </p>
+      <img src="https://i.logos-download.com/8838/2046-05803472c5828be1066b786bd79c64c8.png/Decathlon_Logo_2024.png" alt="Decathlon" class="mx-auto mb-4 h-12 w-auto"/>
+      <h1 class="text-3xl font-bold text-gray-800 mb-2">Decathlon VSM</h1>
+      <p class="text-lg font-medium text-gray-700">Value Stream & Flow Optimization</p>
+      <p class="mt-1 text-gray-600">Map your sports product & software delivery value streams, find bottlenecks, and optimize lead time.</p>
     </div>
 
     <div class="bg-white rounded-xl shadow-lg p-8">
@@ -82,13 +75,7 @@
             data-testid="new-map-name-input"
           />
         </label>
-        <button
-          type="submit"
-          class="w-full py-3 px-4 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
-          data-testid="create-map-button"
-        >
-          Create Blank Map
-        </button>
+        <button type="submit" class="w-full py-3 px-4 bg-[#0082C3] text-white font-medium rounded-lg hover:bg-[#0068A3] transition-colors" data-testid="create-map-button">Create Blank Map</button>
       </form>
 
       <div class="relative my-6">
