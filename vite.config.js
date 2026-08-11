@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite'
 import { svelte } from '@sveltejs/vite-plugin-svelte'
+import { viteSingleFile } from 'vite-plugin-singlefile'
 
 export default defineConfig({
   plugins: [
@@ -9,9 +10,10 @@ export default defineConfig({
         // Per-component runes detection
       },
     }),
+    viteSingleFile() // <--- Thêm plugin gom Single File vào đây
   ],
   optimizeDeps: {
-    // Include @xyflow/svelte for proper dependency optimization
+    // Tối ưu thư viện vẽ sơ đồ Canvas kéo thả
     include: ['@xyflow/svelte'],
   },
   test: {
@@ -19,24 +21,5 @@ export default defineConfig({
     globals: true,
     setupFiles: ['./tests/setup.js'],
     exclude: ['**/node_modules/**', '**/tests/e2e/**'],
-  },
-  build: {
-    rollupOptions: {
-      output: {
-        manualChunks(moduleId) {
-          if (moduleId.includes('node_modules')) {
-            if (moduleId.includes('@xyflow/svelte')) {
-              return 'vendor_xyflow'
-            }
-            if (moduleId.includes('layerchart') || moduleId.includes('d3')) {
-              return 'vendor_charts'
-            }
-            if (moduleId.includes('svelte')) {
-              return 'vendor_svelte'
-            }
-          }
-        },
-      },
-    },
-  },
+  }
 })
