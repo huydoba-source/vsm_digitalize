@@ -154,15 +154,24 @@
     })
   }
 
-  function handleNodeClick({ node }) {
-    vsmUIStore.clearConnectionSelection()
-    vsmUIStore.selectStep(node.id)
-    vsmUIStore.setEditing(true)
-  }
+  function handleNodeClick(event, node) {
+    // Ưu tiên lấy biến node từ tham số thứ 2. 
+    // Fallback cho một số cấu hình bọc event cũ nếu có.
+    const targetNode = node || (event && event.node);
+    if (!targetNode) return;
 
-  function handleEdgeClick({ edge }) {
-    vsmUIStore.selectConnection(edge.id)
-  }
+    vsmUIStore.clearConnectionSelection()
+    vsmUIStore.selectStep(targetNode.id)
+    vsmUIStore.setEditing(true)
+  }
+
+  function handleEdgeClick(event, edge) {
+    const targetEdge = edge || (event && event.edge);
+    if (!targetEdge) return;
+
+    vsmUIStore.clearSelection(); 
+    vsmUIStore.selectConnection(targetEdge.id); // Lệnh này làm trọn gói cả chọn và mở bảng Edit
+  }
 
   function handlePaneClick() {
     vsmUIStore.clearSelection()

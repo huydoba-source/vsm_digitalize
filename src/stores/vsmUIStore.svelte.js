@@ -93,6 +93,12 @@ function createVsmUIStore() {
     setEditingConnection(editing) {
       isEditingConnection = editing
     },
+    get selectedConnectionId() {          // <--- BỔ SUNG DÒNG NÀY
+      return selectedConnectionId         // <--- BỔ SUNG DÒNG NÀY
+    },                                    // <--- BỔ SUNG DÒNG NÀY
+    get isEditingConnection() {           // <--- BỔ SUNG DÒNG NÀY
+      return isEditingConnection          // <--- BỔ SUNG DÒNG NÀY
+    },
     clearConnectionSelection() {
       selectedConnectionId = null
       isEditingConnection = false
