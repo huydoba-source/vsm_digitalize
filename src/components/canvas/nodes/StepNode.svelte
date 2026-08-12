@@ -45,7 +45,22 @@
   <Handle
     type="target"
     position={Position.Left}
+    id="left"
     class="!bg-gray-400 !w-3 !h-3"
+  />
+
+  <Handle
+    type="target"
+    position={Position.Top}
+    id="top"
+    class="!bg-purple-500 !w-3 !h-3"
+  />
+
+  <Handle
+    type="source"
+    position={Position.Bottom}
+    id="bottom"
+    class="!bg-purple-500 !w-3 !h-3"
   />
 
   {#if hasQueue}
@@ -91,6 +106,7 @@
   <Handle
     type="source"
     position={Position.Right}
+    id="right"
     class="!bg-gray-400 !w-3 !h-3"
   />
 </div>

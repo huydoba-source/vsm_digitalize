@@ -119,31 +119,43 @@
 
   // Derive edges from store
   let edges = $derived(
-    vsmDataStore.connections.map((conn) => {
-      const isSelected = conn.id === vsmUIStore.selectedConnectionId
-      const isRework = conn.type === 'rework'
-      return {
-        id: conn.id,
-        source: conn.source,
-        target: conn.target,
-        type: isRework ? 'rework' : 'smoothstep',
-        animated: isRework,
-        selected: isSelected,
-        style: {
-          stroke: getEdgeStrokeColor(isSelected, conn.type),
-          strokeWidth: isSelected ? 3 : 2,
-          strokeDasharray: conn.type === 'rework' ? '5,5' : 'none',
-        },
-        label: conn.type === 'rework' ? `${conn.reworkRate}% rework` : undefined,
-        labelStyle: { fill: conn.type === 'rework' ? '#ef4444' : '#6b7280', fontSize: 10 },
-      }
-    })
-  )
+    vsmDataStore.connections.map((conn) => {
+      const isSelected = conn.id === vsmUIStore.selectedConnectionId
+      const isRework = conn.type === 'rework'
+      const isVertical = conn.type === 'vertical'
+
+      return {
+        id: conn.id,
+        source: conn.source,
+        target: conn.target,
+        // BỔ SUNG: Truyền chính xác ID của Handle
+        sourceHandle: conn.sourceHandle || (isVertical ? 'bottom' : 'right'),
+        targetHandle: conn.targetHandle || (isVertical ? 'top' : 'left'),
+        
+        type: isVertical ? 'straight' : (isRework ? 'rework' : 'smoothstep'),
+        animated: isRework,
+        selected: isSelected,
+        style: {
+          stroke: getEdgeStrokeColor(isSelected, conn.type),
+          strokeWidth: isSelected ? 3 : 2,
+          strokeDasharray: isRework ? '5,5' : (isVertical ? '3,3' : 'none'),
+        },
+        label: conn.type === 'rework' ? `${conn.reworkRate}% rework` : undefined,
+        labelStyle: { fill: conn.type === 'rework' ? '#ef4444' : '#6b7280', fontSize: 10 },
+      }
+    })
+  )
 
   function handleConnect(connection) {
-    const { source, target } = connection
-    withUndo(() => vsmDataStore.addConnection(source, target))
-  }
+    const { source, target, sourceHandle, targetHandle } = connection
+    
+    // Kiểm tra dựa trên ID của handle vừa được thêm
+    const isVertical = sourceHandle === 'bottom' || targetHandle === 'top' || sourceHandle === 'top' || targetHandle === 'bottom'
+    const type = isVertical ? 'vertical' : 'forward'
+
+    // Gửi thêm sourceHandle và targetHandle vào Store
+    withUndo(() => vsmDataStore.addConnection(source, target, type, 0, sourceHandle, targetHandle))
+  }
 
   function handleNodeDragStop({ targetNode, nodes }) {
     const dragged = nodes?.length ? nodes : targetNode ? [targetNode] : []

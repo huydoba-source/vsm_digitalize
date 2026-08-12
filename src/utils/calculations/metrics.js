@@ -19,43 +19,39 @@ import {
 } from '../../data/thresholds.js'
 
 // ==============================================================================
-// TYPE DEFINITIONS
+// BỘ LỌC THÔNG MINH (BỔ SUNG MỚI)
 // ==============================================================================
 
 /**
- * @typedef {Object} Step
- * @property {string} id
- * @property {string} name
- * @property {number} processTime - Active work time (minutes)
- * @property {number} leadTime - Total elapsed time (minutes)
- * @property {number} percentCompleteAccurate - Quality metric (0-100)
- * @property {number} queueSize - Items waiting
+ * Lọc ra những block đang thực sự tham gia vào luồng
+ * 1. Không phải là process con
+ * 2. Phải có ít nhất 1 kết nối (tránh đếm các block trơ trọi)
  */
+export function getActiveMainSteps(steps, connections) {
+  if (!steps) return [];
+  
+  let active = steps.filter(s => !s.isSubProcess);
+  
+  if (Array.isArray(connections) && connections.length > 0) {
+    const connectedIds = new Set();
+    connections.forEach(c => {
+      connectedIds.add(c.source);
+      connectedIds.add(c.target);
+    });
+    active = active.filter(s => connectedIds.has(s.id));
+  } else if (Array.isArray(connections) && connections.length === 0) {
+    // Nếu map chưa có bất kỳ connection nào, không đếm block nào cả
+    return [];
+  }
+  
+  return active;
+}
 
-/**
- * @typedef {Object} Connection
- * @property {string} source - Source step ID
- * @property {string} target - Target step ID
- * @property {'forward'|'rework'} type
- * @property {number} reworkRate - Percentage (0-100)
- */
+// ==============================================================================
+// TYPE DEFINITIONS
+// ==============================================================================
 
-/**
- * @typedef {Object} Metrics
- * @property {number} totalLeadTime - Sum of all lead times (minutes)
- * @property {number} totalProcessTime - Sum of all process times (minutes)
- * @property {Object} flowEfficiency - Efficiency calculation result
- * @property {number} flowEfficiency.value - Percentage (0-100)
- * @property {string} flowEfficiency.label - Status label
- * @property {Object} firstPassYield - Quality metric result
- * @property {number} firstPassYield.value - Percentage (0-100)
- * @property {string} firstPassYield.label - Status label
- * @property {number} stepCount - Number of steps
- * @property {number} totalQueueSize - Sum of all queue sizes
- * @property {number} activityRatio - Process time / Lead time ratio
- * @property {number} reworkImpact - Estimated rework overhead
- * @property {string[]} bottleneckIds - IDs of bottleneck steps
- */
+// (Giữ nguyên các comment @typedef như của bạn)
 
 // ==============================================================================
 // PRIMARY API - Use these functions as entry points
@@ -64,44 +60,23 @@ import {
 // Time constants
 const MINUTES_PER_WORK_DAY = 480
 
-/**
- * Calculate all metrics for a value stream (Main facade function)
- *
- * This is the primary entry point for metric calculations.
- * Computes comprehensive VSM metrics including:
- * - Time metrics (lead time, process time)
- * - Quality metrics (flow efficiency, first pass yield)
- * - Bottleneck identification
- * - Rework impact analysis
- *
- * @param {Step[]} steps - Array of process steps
- * @param {Connection[]} connections - Array of connections between steps
- * @returns {Metrics} All calculated metrics
- *
- * @example
- * const metrics = calculateMetrics(steps, connections)
- * console.log(metrics.flowEfficiency.value) // 25
- * console.log(metrics.bottleneckIds) // ['step-2', 'step-5']
- */
 export function calculateMetrics(steps = [], connections = []) {
+  // Lấy ra danh sách các bước hợp lệ cho toàn bộ map
+  const activeSteps = getActiveMainSteps(steps, connections);
+
   return {
-    totalLeadTime: calculateTotalLeadTime(steps),
-    totalProcessTime: calculateTotalProcessTime(steps),
-    flowEfficiency: calculateFlowEfficiency(steps),
-    firstPassYield: calculateFirstPassYield(steps),
-    stepCount: steps.length,
-    totalQueueSize: calculateTotalQueueSize(steps),
-    activityRatio: calculateActivityRatio(steps),
-    reworkImpact: calculateReworkImpact(steps, connections),
-    bottleneckIds: identifyBottlenecks(steps),
+    totalLeadTime: calculateTotalLeadTime(steps, connections),
+    totalProcessTime: calculateTotalProcessTime(steps, connections),
+    flowEfficiency: calculateFlowEfficiency(steps, connections),
+    firstPassYield: calculateFirstPassYield(steps, connections),
+    stepCount: activeSteps.length, // Đếm số block hợp lệ
+    totalQueueSize: calculateTotalQueueSize(steps, connections),
+    activityRatio: calculateActivityRatio(steps, connections),
+    reworkImpact: calculateReworkImpact(steps, connections), // Giữ nguyên hàm này vì nó lấy baseLeadTime
+    bottleneckIds: identifyBottlenecks(steps, connections),
   }
 }
 
-/**
- * Format duration for display
- * @param {number} minutes - Duration in minutes
- * @returns {string} Formatted duration string
- */
 export function formatDuration(minutes) {
   if (minutes === 0) return '0m'
   if (minutes < 60) return `${minutes}m`
@@ -120,37 +95,21 @@ export function formatDuration(minutes) {
 // CALCULATION UTILITIES - Exported for testing and direct use
 // ==============================================================================
 
-// Cap to avoid infinity in rework calculations
 const MAX_REWORK_RATE = 0.95
 
-/**
- * Calculate total lead time for a value stream
- * @param {Array} steps - Array of process steps
- * @returns {number} Total lead time in minutes
- */
-export function calculateTotalLeadTime(steps) {
-  if (!steps || steps.length === 0) return 0
-  return steps.reduce((sum, step) => sum + (step.leadTime || 0), 0)
+export function calculateTotalLeadTime(steps, connections) {
+  const activeSteps = getActiveMainSteps(steps, connections);
+  return activeSteps.reduce((sum, step) => sum + (step.leadTime || 0), 0)
 }
 
-/**
- * Calculate total process time for a value stream
- * @param {Array} steps - Array of process steps
- * @returns {number} Total process time in minutes
- */
-export function calculateTotalProcessTime(steps) {
-  if (!steps || steps.length === 0) return 0
-  return steps.reduce((sum, step) => sum + (step.processTime || 0), 0)
+export function calculateTotalProcessTime(steps, connections) {
+  const activeSteps = getActiveMainSteps(steps, connections);
+  return activeSteps.reduce((sum, step) => sum + (step.processTime || 0), 0)
 }
 
-/**
- * Calculate flow efficiency
- * @param {Array} steps - Array of process steps
- * @returns {Object} Flow efficiency result
- */
-export function calculateFlowEfficiency(steps) {
-  const processTime = calculateTotalProcessTime(steps)
-  const leadTime = calculateTotalLeadTime(steps)
+export function calculateFlowEfficiency(steps, connections) {
+  const processTime = calculateTotalProcessTime(steps, connections)
+  const leadTime = calculateTotalLeadTime(steps, connections)
 
   if (leadTime === 0) {
     return {
@@ -181,13 +140,9 @@ export function calculateFlowEfficiency(steps) {
   }
 }
 
-/**
- * Calculate first pass yield (product of all %C&A)
- * @param {Array} steps - Array of process steps
- * @returns {Object} First pass yield result
- */
-export function calculateFirstPassYield(steps) {
-  if (!steps || steps.length === 0) {
+export function calculateFirstPassYield(steps, connections) {
+  const activeSteps = getActiveMainSteps(steps, connections);
+  if (activeSteps.length === 0) {
     return {
       value: 0,
       percentage: 0,
@@ -196,7 +151,7 @@ export function calculateFirstPassYield(steps) {
     }
   }
 
-  const value = steps.reduce(
+  const value = activeSteps.reduce(
     (product, step) => product * ((step.percentCompleteAccurate || 100) / 100),
     1
   )
@@ -219,45 +174,28 @@ export function calculateFirstPassYield(steps) {
   }
 }
 
-/**
- * Calculate total queue size across all steps
- * @param {Array} steps - Array of process steps
- * @returns {number} Total queue size
- */
-export function calculateTotalQueueSize(steps) {
-  if (!steps || steps.length === 0) return 0
-  return steps.reduce((sum, step) => sum + (step.queueSize || 0), 0)
+export function calculateTotalQueueSize(steps, connections) {
+  const activeSteps = getActiveMainSteps(steps, connections);
+  return activeSteps.reduce((sum, step) => sum + (step.queueSize || 0), 0)
 }
 
-/**
- * Calculate activity ratio (average process time per step)
- * Higher indicates more value-added work per step
- * @param {Array} steps - Array of process steps
- * @returns {Object} Activity ratio result
- */
-export function calculateActivityRatio(steps) {
-  if (!steps || steps.length === 0) {
+export function calculateActivityRatio(steps, connections) {
+  const activeSteps = getActiveMainSteps(steps, connections);
+  if (activeSteps.length === 0) {
     return {
       value: 0,
       displayValue: 'N/A',
     }
   }
-  const avgProcessTime = calculateTotalProcessTime(steps) / steps.length
+  const avgProcessTime = calculateTotalProcessTime(steps, connections) / activeSteps.length
   return {
     value: avgProcessTime,
     displayValue: formatDuration(Math.round(avgProcessTime)),
   }
 }
 
-/**
- * Calculate effective lead time accounting for rework loops
- * Uses geometric series: for each rework loop, multiply affected path by 1/(1-reworkRate)
- * @param {Array} steps - Array of process steps
- * @param {Array} connections - Array of connections between steps
- * @returns {Object} Rework impact metrics
- */
 export function calculateReworkImpact(steps, connections) {
-  const baseLeadTime = calculateTotalLeadTime(steps)
+  const baseLeadTime = calculateTotalLeadTime(steps, connections)
 
   if (!connections || connections.length === 0) {
     return {
@@ -280,8 +218,6 @@ export function calculateReworkImpact(steps, connections) {
     }
   }
 
-  // Calculate cumulative rework impact
-  // For simplicity, we sum rework rates (capped to avoid infinity)
   const totalReworkRate = Math.min(
     reworkConnections.reduce((sum, c) => sum + (c.reworkRate || 0) / 100, 0),
     MAX_REWORK_RATE
@@ -308,22 +244,17 @@ export function calculateReworkImpact(steps, connections) {
   }
 }
 
-/**
- * Identify bottleneck steps (queue size significantly above average)
- * @param {Array} steps - Array of process steps
- * @returns {Array} Array of step IDs identified as bottlenecks
- */
-export function identifyBottlenecks(steps) {
-  if (!steps || steps.length === 0) return []
+export function identifyBottlenecks(steps, connections) {
+  const activeSteps = getActiveMainSteps(steps, connections);
+  if (activeSteps.length === 0) return []
 
-  const stepsWithQueue = steps.filter((s) => (s.queueSize || 0) > 0)
+  const stepsWithQueue = activeSteps.filter((s) => (s.queueSize || 0) > 0)
   if (stepsWithQueue.length === 0) return []
 
   const avgQueue = stepsWithQueue.reduce((sum, s) => sum + s.queueSize, 0) / stepsWithQueue.length
   const threshold = Math.max(avgQueue * BOTTLENECK_QUEUE_MULTIPLIER, BOTTLENECK_QUEUE_THRESHOLD)
 
-  return steps.filter((s) => (s.queueSize || 0) > threshold).map((s) => s.id)
+  return activeSteps.filter((s) => (s.queueSize || 0) > threshold).map((s) => s.id)
 }
 
-// Alias for backward compatibility
 export const calculateAllMetrics = calculateMetrics

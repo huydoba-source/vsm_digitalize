@@ -87,6 +87,81 @@ function createVsmDataStore(repository = vsmLocalStorageRepo) {
     })
   }
 
+  function aggregateSubprocesses() {
+    const verticalConns = connections.filter(c => c.type === 'vertical')
+    const horizontalConns = connections.filter(c => c.type !== 'vertical')
+
+    if (verticalConns.length === 0) return
+
+    // 1. CHỈ TÌM NHỮNG BLOCK CÓ LIÊN KẾT NGANG
+    const hasHorizontal = new Set()
+    horizontalConns.forEach(c => {
+      hasHorizontal.add(c.source)
+      hasHorizontal.add(c.target)
+    })
+
+    const childrenByParent = {}
+    verticalConns.forEach(c => {
+      if (!childrenByParent[c.target]) childrenByParent[c.target] = []
+      childrenByParent[c.target].push(c.source)
+    })
+
+    const getAllDescendants = (nodeId, visited = new Set()) => {
+      if (visited.has(nodeId)) return []
+      visited.add(nodeId)
+      let descendants = []
+      const children = childrenByParent[nodeId] || []
+      for (const childId of children) {
+        descendants.push(childId)
+        descendants = descendants.concat(getAllDescendants(childId, visited))
+      }
+      return descendants
+    }
+
+    let hasChanges = false
+    // Reset lại cờ isSubProcess
+    let newSteps = steps.map(s => ({ ...s, isSubProcess: false }))
+
+    Object.keys(childrenByParent).forEach(parentId => {
+      // 2. CHỐT CHẶN LOGIC: Bỏ qua nếu block này KHÔNG có liên kết ngang
+      if (!hasHorizontal.has(parentId)) return
+
+      const descendantIds = getAllDescendants(parentId)
+      if (descendantIds.length === 0) return
+
+      let totalPT = 0
+      let totalLT = 0
+      let totalCA = 1
+
+      descendantIds.forEach(id => {
+        const childIndex = newSteps.findIndex(s => s.id === id)
+        if (childIndex !== -1) {
+          const childNode = newSteps[childIndex]
+          totalPT += Number(childNode.processTime) || 0
+          totalLT += Number(childNode.leadTime) || 0
+          totalCA *= (Number(childNode.percentCompleteAccurate) || 100) / 100
+          
+          // Gắn cờ báo hiệu đây là block con để tránh tính lặp ở Dashboard
+          newSteps[childIndex] = { ...childNode, isSubProcess: true }
+        }
+      })
+
+      // 3. Ghi đè vào block Development (Cha)
+      const parentIndex = newSteps.findIndex(s => s.id === parentId)
+      if (parentIndex !== -1) {
+        newSteps[parentIndex] = {
+          ...newSteps[parentIndex],
+          processTime: totalPT,
+          leadTime: totalLT,
+          percentCompleteAccurate: Math.round(totalCA * 100)
+        }
+        hasChanges = true
+      }
+    })
+
+    if (hasChanges) steps = newSteps
+  }
+
   return {
     // Reactive getters
     get id() {
@@ -282,6 +357,7 @@ function createVsmDataStore(repository = vsmLocalStorageRepo) {
       steps = steps.map((step) =>
         step.id === stepId ? { ...step, ...updates } : step
       )
+      aggregateSubprocesses()
       updatedAt = new Date().toISOString()
       persist()
     },
@@ -300,6 +376,7 @@ function createVsmDataStore(repository = vsmLocalStorageRepo) {
           !(a.targetType === 'step' && a.targetId === stepId) &&
           !(a.targetType === 'connection' && removedConnectionIds.includes(a.targetId))
       )
+      aggregateSubprocesses()
       updatedAt = new Date().toISOString()
       persist()
     },
@@ -313,14 +390,20 @@ function createVsmDataStore(repository = vsmLocalStorageRepo) {
     },
 
     // Connection CRUD
-    addConnection(source, target, type = 'forward', reworkRate = 0) {
+    // BỔ SUNG tham số sourceHandle và targetHandle
+    addConnection(source, target, type = 'forward', reworkRate = 0, sourceHandle = 'right', targetHandle = 'left') {
       const existingConnection = connections.find(
         (c) => c.source === source && c.target === target
       )
       if (existingConnection) return null
 
       const newConnection = createConnection(source, target, type, reworkRate)
+      // Lưu lại vị trí chấm tròn
+      newConnection.sourceHandle = sourceHandle
+      newConnection.targetHandle = targetHandle
+      
       connections = [...connections, newConnection]
+      aggregateSubprocesses() // Vẫn giữ nguyên lệnh gọi này
       updatedAt = new Date().toISOString()
       persist()
       return newConnection
@@ -339,6 +422,7 @@ function createVsmDataStore(repository = vsmLocalStorageRepo) {
       annotations = annotations.filter(
         (a) => !(a.targetType === 'connection' && a.targetId === connectionId)
       )
+      aggregateSubprocesses()
       updatedAt = new Date().toISOString()
       persist()
     },
