@@ -14,7 +14,7 @@ import { createAnnotation } from '../utils/annotations.js'
 import { sanitizeVSMData, validateVSMData } from '../utils/validation/vsmValidator.js'
 import { autoPositionStep } from '../utils/ui/autoPositionStep.js'
 import { vsmLocalStorageRepo } from '../infrastructure/VsmLocalStorageRepository.js'
-
+import { vsmUIStore } from './vsmUIStore.svelte.js'
 /**
  * @typedef {import('../types/index.js').Step} Step
  * @typedef {import('../types/index.js').Connection} Connection
@@ -156,6 +156,7 @@ function createVsmDataStore(repository = vsmLocalStorageRepo) {
       annotations = []
       baseline = null
       persist()
+      vsmUIStore.closeWelcomeScreen() // MỚI THÊM: Đóng Trang chủ sau khi tạo map mới
     },
 
     // Capture the live map as the baseline (current state) for comparison
@@ -203,6 +204,7 @@ function createVsmDataStore(repository = vsmLocalStorageRepo) {
       annotations = safe.annotations || []
       baseline = safe.baseline || null
       persist()
+      vsmUIStore.closeWelcomeScreen() // MỚI THÊM: Đóng Trang chủ sau khi tải map/template
     },
 
     clearMap() {

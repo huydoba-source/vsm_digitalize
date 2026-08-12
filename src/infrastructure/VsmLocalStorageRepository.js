@@ -1,48 +1,65 @@
 /**
- * VsmLocalStorageRepository
- * Dedicated persistence layer for VSM data using localStorage
- * Extracted from vsmDataStore to separate infrastructure from domain
+ * VSM LocalStorage Repository (Google Apps Script Safe)
+ * Includes try/catch safety and memory fallback for third-party iframe restrictions
  */
 
-import {
-  getPersistedValue,
-  persistValue,
-  clearPersistedValue,
-} from '../utils/persistedState.js'
+class VsmLocalStorageRepository {
+  constructor(key = 'vsm_data') {
+    this.key = key
+    this.memoryStorage = null
+  }
 
-/**
- * Create a localStorage repository for VSM data
- * @param {string} storageKey - localStorage key to use
- * @returns {Object} Repository with save, load, and clear methods
- */
-export const createVsmLocalStorageRepository = (storageKey) => {
-  /**
-   * Save VSM data to localStorage
-   * @param {Object} data - VSM data to persist
-   */
-  const save = (data) => {
-    persistValue(storageKey, data)
+  // Kiểm tra an toàn xem trình duyệt/iframe có cho phép dùng LocalStorage không
+  isLocalStorageAvailable() {
+    try {
+      const testKey = '__vsm_test__'
+      window.localStorage.setItem(testKey, testKey)
+      window.localStorage.removeItem(testKey)
+      return true
+    } catch (e) {
+      return false
+    }
   }
 
   /**
-   * Load VSM data from localStorage
-   * @param {Object} defaults - Default value if nothing stored
-   * @param {Function} [sanitize] - Optional sanitizer for loaded data
-   * @returns {Object} Loaded data or defaults
+   * Load VSM data from localStorage or memory fallback
+   * @param {Object} initialState
+   * @param {Function} [sanitizer]
+   * @returns {Object}
    */
-  const load = (defaults, sanitize) => {
-    return getPersistedValue(storageKey, defaults, sanitize)
+  load(initialState, sanitizer) {
+    try {
+      if (this.isLocalStorageAvailable()) {
+        const item = window.localStorage.getItem(this.key)
+        if (item) {
+          const parsed = JSON.parse(item)
+          return sanitizer ? sanitizer(parsed) : parsed
+        }
+      } else if (this.memoryStorage) {
+        return sanitizer ? sanitizer(this.memoryStorage) : this.memoryStorage
+      }
+    } catch (err) {
+      console.warn('LocalStorage load failed, fallback to initial state:', err)
+    }
+    return initialState
   }
 
   /**
-   * Clear persisted VSM data
+   * Save VSM data to localStorage or memory fallback
+   * @param {Object} data
    */
-  const clear = () => {
-    clearPersistedValue(storageKey)
+  save(data) {
+    try {
+      if (this.isLocalStorageAvailable()) {
+        window.localStorage.setItem(this.key, JSON.stringify(data))
+      } else {
+        this.memoryStorage = data
+      }
+    } catch (err) {
+      console.warn('LocalStorage save failed, using memory fallback:', err)
+      this.memoryStorage = data
+    }
   }
-
-  return { save, load, clear }
 }
 
-/** Default singleton repository for the VSM data store */
-export const vsmLocalStorageRepo = createVsmLocalStorageRepository('vsm-data-storage')
+export const vsmLocalStorageRepo = new VsmLocalStorageRepository()

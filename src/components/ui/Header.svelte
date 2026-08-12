@@ -1,5 +1,6 @@
 <script>
   import { vsmDataStore } from '../../stores/vsmDataStore.svelte.js'
+  import { vsmUIStore } from '../../stores/vsmUIStore.svelte.js'
   import { vsmIOStore } from '../../stores/vsmIOStore.svelte.js'
   import { toastStore } from '../../stores/toastStore.svelte.js'
   import { undoStore } from '../../stores/undoStore.svelte.js'
@@ -96,7 +97,9 @@
     const reader = new FileReader()
     reader.onload = (event) => {
       const result = vsmIOStore.importFromJson(event.target.result)
-      if (!result) {
+      if (result) {
+        vsmUIStore.closeWelcomeScreen()
+      } else {
         toastStore.add('Failed to import file. Please check the format.', 'error')
       }
     }
@@ -114,6 +117,7 @@
   function handleConfirmNewMap() {
     showNewMapConfirm = false
     vsmDataStore.clearMap()
+    vsmUIStore.closeWelcomeScreen()
   }
 
   function handleCancelNewMap() {
@@ -172,11 +176,26 @@
         </svg>
       </button>
     {/if}
-    <div class="flex items-center gap-2">
-      <img src="https://i.logos-download.com/8838/2046-05803472c5828be1066b786bd79c64c8.png/Decathlon_Logo_2024.png" alt="Decathlon" class="h-6 w-auto"/>
+
+    <!-- NÚT LOGO DECATHLON QUAY VỀ TRANG CHỦ -->
+    <button
+      type="button"
+      onclick={() => vsmUIStore.openWelcomeScreen()}
+      class="group flex items-center gap-2 px-2 py-1 -ml-1 rounded-md hover:bg-gray-100 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500"
+      title="Về Trang chủ (Decathlon VSM)"
+      aria-label="Về Trang chủ Decathlon VSM"
+      data-testid="home-button"
+    >
+      <img
+        src="https://i.logos-download.com/8838/2046-05803472c5828be1066b786bd79c64c8.png/Decathlon_Logo_2024.png"
+        alt="Decathlon"
+        class="h-6 w-auto transition-transform group-hover:scale-105"
+      />
       <span class="hidden sm:inline font-bold text-[#0082C3]">VSM</span>
-    </div>
+    </button>
+
     <div class="h-6 w-px bg-gray-300"></div>
+
     {#if isEditingName}
       <input
         type="text"

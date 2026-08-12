@@ -27,9 +27,8 @@
   // Off-canvas sidebar drawer (small screens)
   let sidebarOpen = $state(false)
 
-  // Keyboard shortcuts overlay (local state per D5)
+  // Keyboard shortcuts overlay
   let showShortcuts = $state(false)
-  // Capture the element that had focus when the overlay was opened so we can restore it on close
   let shortcutsTriggerRef = $state(null)
 
   function handleGlobalKeyDown(e) {
@@ -58,8 +57,11 @@
     }
   }
 
-  // Reactive derived values from stores
+  // Reactive derived values từ stores (không dùng $effect gây lặp)
   let hasVsm = $derived(vsmDataStore.id !== null)
+  let showWelcomeScreen = $derived(vsmUIStore.showWelcomeScreen)
+  let isWelcomeVisible = $derived(!hasVsm || showWelcomeScreen)
+
   let selectedStepId = $derived(vsmUIStore.selectedStepId)
   let isEditing = $derived(vsmUIStore.isEditing)
   let selectedConnectionId = $derived(vsmUIStore.selectedConnectionId)
@@ -94,7 +96,8 @@
 <svelte:window onkeydown={handleGlobalKeyDown} />
 
 <KeyboardShortcutsOverlay visible={showShortcuts} triggerRef={shortcutsTriggerRef} onclose={() => { showShortcuts = false }} />
-{#if !hasVsm}
+
+{#if isWelcomeVisible}
   <WelcomeScreen />
 {:else}
   <SvelteFlowProvider>
@@ -126,8 +129,6 @@
           onkeydown={handleCanvasKeyDown}
         >
           <SimulationControls />
-          <!-- Diagram gets a generous, fixed share of the viewport so it stays
-               usable on small screens; the totals bar stays overlaid. -->
           <div class="relative shrink-0 h-[60vh] min-h-[320px] lg:h-[70vh]">
             <CanvasTotalsBar />
             <Canvas />

@@ -8,7 +8,15 @@
  * Create the VSM UI store
  * @returns {Object} VSM UI store with reactive state and actions
  */
+/**
+ * VSM UI Store - Svelte 5 Runes
+ * Ephemeral UI state management
+ */
+
 function createVsmUIStore() {
+  // Trang chủ state
+  let showWelcomeScreen = $state(false)
+
   // Step selection & editing
   let selectedStepId = $state(null)
   let isEditing = $state(false)
@@ -22,34 +30,36 @@ function createVsmUIStore() {
   let guidanceForceShow = $state(false)
 
   return {
-    // Reactive getters - Step
+    // Welcome Screen Getters & Actions
+    get showWelcomeScreen() {
+      return showWelcomeScreen
+    },
+    openWelcomeScreen() {
+      showWelcomeScreen = true
+      selectedStepId = null
+      isEditing = false
+      selectedConnectionId = null
+      isEditingConnection = false
+    },
+    closeWelcomeScreen() {
+      showWelcomeScreen = false
+    },
+
+    // Step Getters & Actions
     get selectedStepId() {
       return selectedStepId
     },
     get isEditing() {
       return isEditing
     },
-
-    // Reactive getters - Connection
-    get selectedConnectionId() {
-      return selectedConnectionId
-    },
-    get isEditingConnection() {
-      return isEditingConnection
-    },
-
-    // Step Actions
     selectStep(stepId) {
       selectedStepId = stepId
-      // Clear connection selection when selecting a step
       selectedConnectionId = null
       isEditingConnection = false
     },
-
     clearSelection() {
       selectedStepId = null
     },
-
     setEditing(editing) {
       isEditing = editing
     },
@@ -58,20 +68,16 @@ function createVsmUIStore() {
     get guidanceDismissed() {
       return guidanceDismissed
     },
-
     get guidanceForceShow() {
       return guidanceForceShow
     },
-
     dismissGuidance() {
       guidanceDismissed = true
       guidanceForceShow = false
     },
-
     forceShowGuidance() {
       guidanceForceShow = true
     },
-
     resetGuidance() {
       guidanceDismissed = false
       guidanceForceShow = false
@@ -81,15 +87,12 @@ function createVsmUIStore() {
     selectConnection(connectionId) {
       selectedConnectionId = connectionId
       isEditingConnection = true
-      // Clear step selection when selecting a connection
       selectedStepId = null
       isEditing = false
     },
-
     setEditingConnection(editing) {
       isEditingConnection = editing
     },
-
     clearConnectionSelection() {
       selectedConnectionId = null
       isEditingConnection = false
@@ -107,5 +110,4 @@ function createVsmUIStore() {
   }
 }
 
-// Export singleton instance
 export const vsmUIStore = createVsmUIStore()

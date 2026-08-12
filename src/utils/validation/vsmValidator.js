@@ -98,6 +98,53 @@ export function validateVSMData(data) {
 }
 
 /**
+ * Sanitize a single step with safe defaults including position coordinates (MỚI THÊM)
+ * @param {*} step 
+ * @param {number} index 
+ * @returns {Object}
+ */
+export function sanitizeStep(step, index = 0) {
+  if (!step || typeof step !== 'object') {
+    return {
+      id: crypto.randomUUID(),
+      name: `Step ${index + 1}`,
+      type: 'custom',
+      description: '',
+      processTime: 60,
+      leadTime: 240,
+      percentCompleteAccurate: 100,
+      queueSize: 0,
+      batchSize: 1,
+      peopleCount: 1,
+      automated: true,
+      position: { x: 50 + index * 250, y: 150 },
+    }
+  }
+
+  const posX = typeof step.position?.x === 'number' && !isNaN(step.position.x)
+    ? step.position.x
+    : 50 + index * 250
+  const posY = typeof step.position?.y === 'number' && !isNaN(step.position.y)
+    ? step.position.y
+    : 150
+
+  return {
+    id: step.id || crypto.randomUUID(),
+    name: step.name || `Step ${index + 1}`,
+    type: step.type || 'custom',
+    description: step.description || '',
+    processTime: typeof step.processTime === 'number' && !isNaN(step.processTime) ? step.processTime : 0,
+    leadTime: typeof step.leadTime === 'number' && !isNaN(step.leadTime) ? step.leadTime : 0,
+    percentCompleteAccurate: typeof step.percentCompleteAccurate === 'number' && !isNaN(step.percentCompleteAccurate) ? step.percentCompleteAccurate : 100,
+    queueSize: typeof step.queueSize === 'number' && !isNaN(step.queueSize) ? step.queueSize : 0,
+    batchSize: typeof step.batchSize === 'number' && !isNaN(step.batchSize) ? step.batchSize : 1,
+    peopleCount: typeof step.peopleCount === 'number' && !isNaN(step.peopleCount) ? step.peopleCount : 1,
+    automated: step.automated !== false,
+    position: { x: posX, y: posY },
+  }
+}
+
+/**
  * Sanitize and normalize VSM data with safe defaults
  * @param {*} data - Raw data to sanitize
  * @returns {Object} Sanitized VSM data
@@ -116,11 +163,14 @@ export function sanitizeVSMData(data) {
     }
   }
 
+  const rawSteps = Array.isArray(data.steps) ? data.steps : []
+  const sanitizedSteps = rawSteps.map((s, idx) => sanitizeStep(s, idx)) // MỚI CẬP NHẬT: Chuẩn hóa tọa độ x, y cho từng step
+
   return {
     id: data.id || null,
     name: data.name || '',
     description: data.description || '',
-    steps: Array.isArray(data.steps) ? data.steps : [],
+    steps: sanitizedSteps,
     connections: Array.isArray(data.connections) ? data.connections : [],
     createdAt: data.createdAt || null,
     updatedAt: data.updatedAt || null,
