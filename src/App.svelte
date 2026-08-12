@@ -149,7 +149,7 @@
         <!-- Editor: side panel on desktop, bottom sheet on phone/tablet -->
         {#if editorOpen}
           <div
-            class="fixed inset-x-0 bottom-0 z-40 max-h-[85vh] overflow-y-auto bg-white shadow-2xl lg:static lg:inset-auto lg:max-h-none lg:overflow-visible lg:shadow-none"
+            class="fixed inset-x-0 bottom-0 z-40 max-h-[85vh] overflow-y-auto bg-white shadow-2xl lg:static lg:inset-auto lg:h-full lg:max-h-full lg:shadow-none"
           >
             <EditorPanel
               {selectedStepId}
