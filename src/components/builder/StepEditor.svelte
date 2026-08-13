@@ -75,7 +75,14 @@
   function handleSubmit(e) {
     e.preventDefault()
     const payload = buildPayload()
-    const validationResult = validateStep(payload)
+    
+    // Lấy block cha và toàn bộ danh sách block hiện tại
+    const parentStep = step?.parentId ? vsmDataStore.getStepById(step.parentId) : null;
+    const allSteps = vsmDataStore.steps;
+
+    // Truyền thêm allSteps vào
+    const validationResult = validateStep(payload, parentStep, allSteps)
+    
     errors = validationResult.errors
     if (!validationResult.valid) return
 

@@ -91,69 +91,76 @@ function createVsmDataStore(repository = vsmLocalStorageRepo) {
     const verticalConns = connections.filter(c => c.type === 'vertical')
     const horizontalConns = connections.filter(c => c.type !== 'vertical')
 
-    if (verticalConns.length === 0) return
+    if (verticalConns.length === 0) {
+      steps = steps.map(s => ({ ...s, isSubProcess: false, parentId: null }))
+      return
+    }
 
-    // 1. CHỈ TÌM NHỮNG BLOCK CÓ LIÊN KẾT NGANG
+    // 1. Tìm các block thuộc luồng chính (có kết nối ngang)
     const hasHorizontal = new Set()
     horizontalConns.forEach(c => {
       hasHorizontal.add(c.source)
       hasHorizontal.add(c.target)
     })
 
-    const childrenByParent = {}
+    // 2. Tạo danh sách kề (đồ thị không hướng) để không phụ thuộc vào chiều vẽ mũi tên
+    const adj = {}
     verticalConns.forEach(c => {
-      if (!childrenByParent[c.target]) childrenByParent[c.target] = []
-      childrenByParent[c.target].push(c.source)
+      if (!adj[c.source]) adj[c.source] = []
+      if (!adj[c.target]) adj[c.target] = []
+      adj[c.source].push(c.target)
+      adj[c.target].push(c.source)
     })
 
-    const getAllDescendants = (nodeId, visited = new Set()) => {
-      if (visited.has(nodeId)) return []
-      visited.add(nodeId)
-      let descendants = []
-      const children = childrenByParent[nodeId] || []
-      for (const childId of children) {
-        descendants.push(childId)
-        descendants = descendants.concat(getAllDescendants(childId, visited))
-      }
-      return descendants
-    }
+    // 3. Cha là những block vừa nằm trên luồng chính, vừa có kết nối dọc
+    const roots = Object.keys(adj).filter(id => hasHorizontal.has(id))
 
     let hasChanges = false
-    // Reset lại cờ isSubProcess
-    let newSteps = steps.map(s => ({ ...s, isSubProcess: false }))
+    let newSteps = steps.map(s => ({ ...s, isSubProcess: false, parentId: null }))
 
-    Object.keys(childrenByParent).forEach(parentId => {
-      // 2. CHỐT CHẶN LOGIC: Bỏ qua nếu block này KHÔNG có liên kết ngang
-      if (!hasHorizontal.has(parentId)) return
+    roots.forEach(rootId => {
+      const visited = new Set([rootId])
+      const queue = [rootId]
+      const descendants = []
 
-      const descendantIds = getAllDescendants(parentId)
-      if (descendantIds.length === 0) return
+      // Duyệt đồ thị để tìm tất cả các block con/cháu
+      while (queue.length > 0) {
+        const current = queue.shift()
+        if (adj[current]) {
+          adj[current].forEach(neighbor => {
+            // Chỉ đi xuống các block con, không đi ngược sang block chính khác
+            if (!visited.has(neighbor) && !hasHorizontal.has(neighbor)) {
+              visited.add(neighbor)
+              queue.push(neighbor)
+              descendants.push(neighbor)
+              
+              // Gắn cờ và parentId cho block con
+              const childIndex = newSteps.findIndex(s => s.id === neighbor)
+              if (childIndex !== -1) {
+                newSteps[childIndex] = { ...newSteps[childIndex], isSubProcess: true, parentId: rootId }
+              }
+            }
+          })
+        }
+      }
 
-      let totalPT = 0
-      let totalLT = 0
-      let totalCA = 1
+      if (descendants.length === 0) return
 
-      descendantIds.forEach(id => {
-        const childIndex = newSteps.findIndex(s => s.id === id)
-        if (childIndex !== -1) {
-          const childNode = newSteps[childIndex]
-          totalPT += Number(childNode.processTime) || 0
-          totalLT += Number(childNode.leadTime) || 0
-          totalCA *= (Number(childNode.percentCompleteAccurate) || 100) / 100
-          
-          // Gắn cờ báo hiệu đây là block con để tránh tính lặp ở Dashboard
-          newSteps[childIndex] = { ...childNode, isSubProcess: true }
+      // Tính tổng Queue Size của các con
+      let totalQueue = 0
+      descendants.forEach(id => {
+        const childNode = newSteps.find(s => s.id === id)
+        if (childNode) {
+          totalQueue += Number(childNode.queueSize) || 0
         }
       })
 
-      // 3. Ghi đè vào block Development (Cha)
-      const parentIndex = newSteps.findIndex(s => s.id === parentId)
+      // Chỉ ghi đè Queue Size cho Block Cha
+      const parentIndex = newSteps.findIndex(s => s.id === rootId)
       if (parentIndex !== -1) {
         newSteps[parentIndex] = {
           ...newSteps[parentIndex],
-          processTime: totalPT,
-          leadTime: totalLT,
-          percentCompleteAccurate: Math.round(totalCA * 100)
+          queueSize: totalQueue
         }
         hasChanges = true
       }

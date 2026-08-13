@@ -57,7 +57,17 @@
  * })
  * // result.errors.leadTime = 'Lead time must be >= process time'
  */
-export function validateStep(stepData) {
+/**
+ * Domain validation for VSM Step entity
+ * Enforces business rules for step data
+ */
+
+/**
+ * Domain validation for VSM Step entity
+ * Enforces business rules for step data
+ */
+
+export function validateStep(stepData, parentStep = null, allSteps = []) {
   const errors = {}
 
   if (!stepData.name || !stepData.name.trim()) {
@@ -96,6 +106,37 @@ export function validateStep(stepData) {
 
   if (stepData.peopleCount !== undefined && stepData.peopleCount < 1) {
     errors.peopleCount = 'People count must be >= 1'
+  }
+
+  // BỔ SUNG: RÀNG BUỘC CHO BLOCK CON (Tính tổng) DỰA TRÊN BLOCK CHA
+  if (parentStep) {
+    let otherChildrenPT = 0;
+    let otherChildrenLT = 0;
+    let otherChildrenCA = 1;
+
+    // Tính tổng của các block con KHÁC (không tính block đang edit)
+    if (Array.isArray(allSteps) && allSteps.length > 0) {
+      const siblings = allSteps.filter(s => s.parentId === parentStep.id && s.id !== stepData.id);
+      siblings.forEach(child => {
+        otherChildrenPT += Number(child.processTime) || 0;
+        otherChildrenLT += Number(child.leadTime) || 0;
+        otherChildrenCA *= (Number(child.percentCompleteAccurate) || 100) / 100;
+      });
+    }
+
+    const totalNewPT = otherChildrenPT + processTime;
+    const totalNewLT = otherChildrenLT + leadTime;
+    const totalNewCA = Math.round(otherChildrenCA * (pca / 100) * 100);
+
+    if (totalNewPT > parentStep.processTime) {
+      errors.processTime = `Total PT of child steps (${totalNewPT} min) exceeds parent step (${parentStep.processTime} min)`;
+    }
+    if (totalNewLT > parentStep.leadTime) {
+      errors.leadTime = `Total LT of child steps (${totalNewLT} min) exceeds parent step (${parentStep.leadTime} min)`;
+    }
+    if (totalNewCA < parentStep.percentCompleteAccurate) {
+      errors.percentCompleteAccurate = `Total %C&A of child steps (${totalNewCA}%) must >= parent step (${parentStep.percentCompleteAccurate}%)`;
+    }
   }
 
   return {
