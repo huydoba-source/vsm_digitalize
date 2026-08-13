@@ -23,6 +23,7 @@
   import { withUndo } from '../../utils/undoHelper.js'
   import { simDataStore } from '../../stores/simulationDataStore.svelte.js'
   import { simControlStore } from '../../stores/simulationControlStore.svelte.js'
+  import { validateStep } from '../../utils/validation/stepValidator.js'
   import StepNode from './nodes/StepNode.svelte'
   import ReworkEdge from './edges/ReworkEdge.svelte'
   import GuidanceBanner from '../ui/GuidanceBanner.svelte'
@@ -52,7 +53,7 @@
   }
 
   // Non-reactive node cache keyed by step ID.
-  let nodeCache = Object.create(null)
+  // let nodeCache = Object.create(null)
 
   // buildNode hỗ trợ tọa độ safePosition dự phòng khi step.position bị undefined
   const buildNode = (step, queueSize, isBottleneck, selected, index = 0) => {
@@ -78,37 +79,17 @@
     }
   }
 
-  let nodes = $derived.by(() => {
-    const currentStepIds = new Set(vsmDataStore.steps.map((s) => s.id))
-    // Evict stale cache entries for deleted steps
-    for (const id of Object.keys(nodeCache)) {
-      if (!currentStepIds.has(id)) delete nodeCache[id]
-    }
+  let nodes = $derived(
+    vsmDataStore.steps.map((step, index) => {
+      const queueSize = simControlStore.isRunning
+        ? simDataStore.queueSizesByStepId[step.id]
+        : undefined
+      const isBottleneck = simDataStore.detectedBottlenecks.includes(step.id)
+      const selected = step.id === vsmUIStore.selectedStepId
 
-    return vsmDataStore.steps.map((step, index) => {
-      const queueSize = simControlStore.isRunning
-        ? simDataStore.queueSizesByStepId[step.id]
-        : undefined
-      const isBottleneck = simDataStore.detectedBottlenecks.includes(step.id)
-      const selected = step.id === vsmUIStore.selectedStepId
-
-      const cached = nodeCache[step.id]
-      if (
-        cached &&
-        cached.step === step &&
-        cached.queueSize === queueSize &&
-        cached.isBottleneck === isBottleneck &&
-        cached.selected === selected &&
-        typeof cached.node.position?.x === 'number'
-      ) {
-        return cached.node
-      }
-
-      const node = buildNode(step, queueSize, isBottleneck, selected, index)
-      nodeCache[step.id] = { step, queueSize, isBottleneck, selected, node }
-      return node
-    })
-  })
+      return buildNode(step, queueSize, isBottleneck, selected, index)
+    })
+  )
 
   // Helper function to get edge stroke color
   function getEdgeStrokeColor(isSelected, connectionType) {
@@ -149,12 +130,35 @@
   function handleConnect(connection) {
     const { source, target, sourceHandle, targetHandle } = connection
     
-    // Kiểm tra dựa trên ID của handle vừa được thêm
     const isVertical = sourceHandle === 'bottom' || targetHandle === 'top' || sourceHandle === 'top' || targetHandle === 'bottom'
     const type = isVertical ? 'vertical' : 'forward'
 
-    // Gửi thêm sourceHandle và targetHandle vào Store
     withUndo(() => vsmDataStore.addConnection(source, target, type, 0, sourceHandle, targetHandle))
+
+    // ===== BẮT ĐẦU BỔ SUNG: KIỂM TRA LỖI SAU KHI NỐI =====
+    if (isVertical) {
+      // Sau khi nối, vsmDataStore đã tự gán parentId cho block con
+      const allSteps = vsmDataStore.steps;
+      
+      // Quét qua cả 2 block vừa nối xem ai là con và có bị lỗi không
+      [source, target].forEach(nodeId => {
+        const step = allSteps.find(s => s.id === nodeId);
+        if (step && step.parentId) {
+          const parentStep = allSteps.find(s => s.id === step.parentId);
+          if (parentStep) {
+            // Kiểm tra validate
+            const validation = validateStep(step, parentStep, allSteps);
+            if (!validation.valid) {
+              // Bị lỗi -> Hủy chọn connection, chọn step con và mở bảng Edit
+              vsmUIStore.clearConnectionSelection();
+              vsmUIStore.selectStep(step.id);
+              vsmUIStore.setEditing(true);
+            }
+          }
+        }
+      });
+    }
+    // ===== KẾT THÚC BỔ SUNG =====
   }
 
   function handleNodeDragStop({ targetNode, nodes }) {

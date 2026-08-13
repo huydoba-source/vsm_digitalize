@@ -31,8 +31,10 @@
   let errors = $state({})
 
   // Sync form data when step changes
+  // Sync form data when step changes
   $effect(() => {
     if (step) {
+      // 1. Cập nhật form state
       formData = {
         name: step.name,
         type: step.type,
@@ -44,6 +46,34 @@
         batchSize: step.batchSize,
         peopleCount: step.peopleCount || 1,
         automated: step.automated ?? true,
+      }
+
+      // 2. Validate dữ liệu ban đầu
+      const parentId = step?.parentId || null;
+      const parentStep = parentId ? vsmDataStore.getStepById(parentId) : null;
+      
+      // ===== SỬA LỖI Ở ĐÂY =====
+      // Lấy dữ liệu trực tiếp từ 'step' thay vì '...formData' để tránh vòng lặp vô tận
+      const initialPayload = {
+        id: step.id,
+        name: step.name,
+        type: step.type,
+        description: step.description || '',
+        automated: step.automated ?? true,
+        processTime: Number(step.processTime || 0),
+        leadTime: Number(step.leadTime || 0),
+        percentCompleteAccurate: Number(step.percentCompleteAccurate || 100),
+        queueSize: Number(step.queueSize || 0),
+        batchSize: Number(step.batchSize || 1),
+        peopleCount: Number(step.peopleCount || 1),
+      };
+
+      // Chạy validate
+      if (parentStep) {
+        const validationResult = validateStep(initialPayload, parentStep, vsmDataStore.steps);
+        errors = validationResult.errors || {};
+      } else {
+        errors = {};
       }
     }
   })
@@ -61,6 +91,7 @@
   // numerically rather than lexicographically ("240" < "60" is true).
   function buildPayload() {
     return {
+      id: step.id, // <--- BỔ SUNG DÒNG NÀY ĐỂ HỆ THỐNG NHẬN DIỆN ĐÚNG BLOCK
       ...formData,
       processTime: Number(formData.processTime),
       leadTime: Number(formData.leadTime),
