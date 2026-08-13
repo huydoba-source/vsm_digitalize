@@ -221,12 +221,12 @@
 </script>
 
 <div
-  class="w-full h-full relative"
-  onkeydown={handleKeyDown}
-  tabindex="0"
-  role="application"
-  aria-label="Value stream map canvas"
-  data-testid="vsm-canvas"
+  class="w-full h-full relative overflow-hidden"
+  onkeydown={handleKeyDown}
+  tabindex="0"
+  role="application"
+  aria-label="Value stream map canvas"
+  data-testid="vsm-canvas"
 >
   {#if nodes.length === 0}
     <EmptyCanvasPlaceholder />

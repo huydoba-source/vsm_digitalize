@@ -91,6 +91,7 @@ function createVsmDataStore(repository = vsmLocalStorageRepo) {
     const verticalConns = connections.filter(c => c.type === 'vertical')
     const horizontalConns = connections.filter(c => c.type !== 'vertical')
 
+    // Nếu không có bất kỳ kết nối dọc nào trên Canvas, xóa hết quan hệ Cha-Con
     if (verticalConns.length === 0) {
       steps = steps.map(s => ({ ...s, isSubProcess: false, parentId: null }))
       return
@@ -115,7 +116,7 @@ function createVsmDataStore(repository = vsmLocalStorageRepo) {
     // 3. Cha là những block vừa nằm trên luồng chính, vừa có kết nối dọc
     const roots = Object.keys(adj).filter(id => hasHorizontal.has(id))
 
-    let hasChanges = false
+    // Tạo mảng clone mới, MẶC ĐỊNH xóa toàn bộ quan hệ Cha-Con cũ
     let newSteps = steps.map(s => ({ ...s, isSubProcess: false, parentId: null }))
 
     roots.forEach(rootId => {
@@ -134,7 +135,7 @@ function createVsmDataStore(repository = vsmLocalStorageRepo) {
               queue.push(neighbor)
               descendants.push(neighbor)
               
-              // Gắn cờ và parentId cho block con
+              // Gắn cờ và parentId MỚI cho block con
               const childIndex = newSteps.findIndex(s => s.id === neighbor)
               if (childIndex !== -1) {
                 newSteps[childIndex] = { ...newSteps[childIndex], isSubProcess: true, parentId: rootId }
@@ -162,11 +163,11 @@ function createVsmDataStore(repository = vsmLocalStorageRepo) {
           ...newSteps[parentIndex],
           queueSize: totalQueue
         }
-        hasChanges = true
       }
     })
 
-    if (hasChanges) steps = newSteps
+    // LUÔN LUÔN CẬP NHẬT LẠI STEPS ĐỂ GHI NHẬN SỰ THAY ĐỔI CẤU TRÚC (KỂ CẢ KHI XÓA MŨI TÊN)
+    steps = newSteps
   }
 
   return {

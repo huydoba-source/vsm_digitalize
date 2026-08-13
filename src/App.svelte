@@ -129,7 +129,7 @@
           onkeydown={handleCanvasKeyDown}
         >
           <SimulationControls />
-          <div class="relative shrink-0 h-[60vh] min-h-[320px] lg:h-[70vh]">
+          <div class="relative shrink-0 h-[60vh] min-h-[320px] lg:h-[70vh] overflow-hidden border-b border-gray-200">
             <CanvasTotalsBar />
             <Canvas />
           </div>
