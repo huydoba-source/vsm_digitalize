@@ -130,26 +130,40 @@
   function handleConnect(connection) {
     const { source, target, sourceHandle, targetHandle } = connection
     
-    const isVertical = sourceHandle === 'bottom' || targetHandle === 'top' || sourceHandle === 'top' || targetHandle === 'bottom'
+    // 1. NGĂN CHẶN NỐI VÀO THÂN BLOCK (Bắt buộc phải thả trúng chấm màu)
+    // Nếu điểm đầu hoặc điểm cuối bị null -> Hủy lệnh nối
+    if (!sourceHandle || !targetHandle) {
+      return; 
+    }
+
+    // 2. BẮT BUỘC NỐI ĐÚNG CẶP (Ngăn việc kéo từ chấm dọc sang chấm ngang)
+    const isVertical = (sourceHandle === 'bottom' && targetHandle === 'top') || 
+                       (sourceHandle === 'top' && targetHandle === 'bottom');
+                       
+    const isHorizontal = (sourceHandle === 'right' && targetHandle === 'left') || 
+                         (sourceHandle === 'left' && targetHandle === 'right');
+
+    // Nếu không thuộc 2 trường hợp nối hợp lệ trên -> Hủy lệnh nối
+    if (!isVertical && !isHorizontal) {
+      return;
+    }
+
     const type = isVertical ? 'vertical' : 'forward'
 
+    // Thực hiện nối
     withUndo(() => vsmDataStore.addConnection(source, target, type, 0, sourceHandle, targetHandle))
 
-    // ===== BẮT ĐẦU BỔ SUNG: KIỂM TRA LỖI SAU KHI NỐI =====
+    // 3. KIỂM TRA LỖI SAU KHI NỐI DỌC
     if (isVertical) {
-      // Sau khi nối, vsmDataStore đã tự gán parentId cho block con
       const allSteps = vsmDataStore.steps;
       
-      // Quét qua cả 2 block vừa nối xem ai là con và có bị lỗi không
       [source, target].forEach(nodeId => {
         const step = allSteps.find(s => s.id === nodeId);
         if (step && step.parentId) {
           const parentStep = allSteps.find(s => s.id === step.parentId);
           if (parentStep) {
-            // Kiểm tra validate
             const validation = validateStep(step, parentStep, allSteps);
             if (!validation.valid) {
-              // Bị lỗi -> Hủy chọn connection, chọn step con và mở bảng Edit
               vsmUIStore.clearConnectionSelection();
               vsmUIStore.selectStep(step.id);
               vsmUIStore.setEditing(true);
@@ -158,7 +172,6 @@
         }
       });
     }
-    // ===== KẾT THÚC BỔ SUNG =====
   }
 
   function handleNodeDragStop({ targetNode, nodes }) {

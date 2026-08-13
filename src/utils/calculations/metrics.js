@@ -30,18 +30,25 @@ import {
 export function getActiveMainSteps(steps, connections) {
   if (!steps) return [];
   
+  // 1. Luôn loại bỏ các process con dọc đã được nhận diện (isSubProcess)
   let active = steps.filter(s => !s.isSubProcess);
   
-  if (Array.isArray(connections) && connections.length > 0) {
-    const connectedIds = new Set();
-    connections.forEach(c => {
-      connectedIds.add(c.source);
-      connectedIds.add(c.target);
-    });
-    active = active.filter(s => connectedIds.has(s.id));
-  } else if (Array.isArray(connections) && connections.length === 0) {
-    // Nếu map chưa có bất kỳ connection nào, không đếm block nào cả
-    return [];
+  // 2. CHỈ lọc dựa trên các kết nối NGANG
+  if (Array.isArray(connections)) {
+    const horizontalConns = connections.filter(c => c.type !== 'vertical');
+
+    if (horizontalConns.length > 0) {
+      const connectedIds = new Set();
+      horizontalConns.forEach(c => {
+        connectedIds.add(c.source);
+        connectedIds.add(c.target);
+      });
+      // Giữ lại block nếu ID của nó nằm trong danh sách đang được nối NGANG
+      active = active.filter(s => connectedIds.has(s.id));
+    } else {
+      // Nếu map CHƯA CÓ bất kỳ kết nối ngang nào, không đếm block nào vào tổng cả
+      return [];
+    }
   }
   
   return active;
