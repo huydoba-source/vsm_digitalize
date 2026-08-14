@@ -4,14 +4,10 @@
  * Snapshots contain { steps, connections } and are deep-copied to prevent
  * shared-reference mutations.
  *
- * Design decisions:
- * - D1: Undo snapshots are pushed at COMPONENT CALL SITES, not inside vsmDataStore
- * - D2: updateStepPosition (drag ops) is excluded from undo
- * - Max depth: 20 entries (oldest evicted on overflow)
- * - Redo stack clears when a new mutation is pushed after undo
- *
  * @file This file uses Svelte 5 runes ($state)
  */
+
+import { vsmDataStore } from './vsmDataStore.svelte.js'
 
 const MAX_UNDO_DEPTH = 20
 
@@ -30,68 +26,69 @@ const cloneSnapshot = (snapshot) => ({
  * @returns {Object} Undo store with reactive state and actions
  */
 function createUndoStore() {
-  let undoStack = $state([])
-  let redoStack = $state([])
+  // Quản lý lịch sử Undo/Redo phân mảnh cho từng Map ID
+  let histories = $state({})
+
+  // Hàm định tuyến lấy đúng lịch sử của Map đang active
+  function getActiveHistory() {
+    const id = vsmDataStore.id;
+    if (!id) return null;
+    
+    if (!histories[id]) {
+      histories[id] = { undoStack: [], redoStack: [] };
+    }
+    return histories[id];
+  }
 
   return {
-    /** @returns {boolean} Whether undo is available */
     get canUndo() {
-      return undoStack.length > 0
+      const h = getActiveHistory();
+      return h ? h.undoStack.length > 0 : false;
     },
 
-    /** @returns {boolean} Whether redo is available */
     get canRedo() {
-      return redoStack.length > 0
+      const h = getActiveHistory();
+      return h ? h.redoStack.length > 0 : false;
     },
 
-    /**
-     * Push a snapshot onto the undo stack (before a mutation).
-     * Clears the redo stack since the timeline has diverged.
-     * @param {{ steps: Array, connections: Array }} snapshot
-     */
     pushSnapshot(snapshot) {
+      const h = getActiveHistory();
+      if (!h) return;
+
       const cloned = cloneSnapshot(snapshot)
-      const full = [...undoStack, cloned]
-      undoStack = full.length > MAX_UNDO_DEPTH ? full.slice(1) : full
-      redoStack = []
+      const full = [...h.undoStack, cloned]
+      h.undoStack = full.length > MAX_UNDO_DEPTH ? full.slice(1) : full
+      h.redoStack = []
     },
 
-    /**
-     * Undo the last change: pops from undo stack, pushes currentState to redo.
-     * @param {{ steps: Array, connections: Array }} currentState - The current state before restoring
-     * @returns {{ steps: Array, connections: Array } | null} The snapshot to restore, or null if stack empty
-     */
     undo(currentState) {
-      if (undoStack.length === 0) return null
+      const h = getActiveHistory();
+      if (!h || h.undoStack.length === 0) return null;
 
-      const snapshot = undoStack[undoStack.length - 1]
-      undoStack = undoStack.slice(0, -1)
-      redoStack = [...redoStack, cloneSnapshot(currentState)]
+      const snapshot = h.undoStack[h.undoStack.length - 1]
+      h.undoStack = h.undoStack.slice(0, -1)
+      h.redoStack = [...h.redoStack, cloneSnapshot(currentState)]
 
       return cloneSnapshot(snapshot)
     },
 
-    /**
-     * Redo the last undone change: pops from redo stack, pushes currentState to undo.
-     * @param {{ steps: Array, connections: Array }} currentState - The current state before restoring
-     * @returns {{ steps: Array, connections: Array } | null} The snapshot to restore, or null if stack empty
-     */
     redo(currentState) {
-      if (redoStack.length === 0) return null
+      const h = getActiveHistory();
+      if (!h || h.redoStack.length === 0) return null;
 
-      const snapshot = redoStack[redoStack.length - 1]
-      redoStack = redoStack.slice(0, -1)
-      undoStack = [...undoStack, cloneSnapshot(currentState)]
+      const snapshot = h.redoStack[h.redoStack.length - 1]
+      h.redoStack = h.redoStack.slice(0, -1)
+      h.undoStack = [...h.undoStack, cloneSnapshot(currentState)]
 
       return cloneSnapshot(snapshot)
     },
 
-    /**
-     * Clear both undo and redo stacks
-     */
     clear() {
-      undoStack = []
-      redoStack = []
+      const h = getActiveHistory();
+      if (h) {
+        h.undoStack = []
+        h.redoStack = []
+      }
     },
   }
 }

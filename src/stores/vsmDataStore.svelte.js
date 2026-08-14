@@ -2,8 +2,7 @@
 /**
  * VSM Data Store - Svelte 5 Runes
  * Stores steps, connections, and map metadata
- * Persisted to localStorage
- * @file This file uses Svelte 5 runes ($state, etc.)
+ * Persisted to localStorage as a Multi-Map Workspace
  */
 import { createStep } from '../models/StepFactory.js'
 import { createConnection } from '../models/ConnectionFactory.js'
@@ -15,435 +14,256 @@ import { sanitizeVSMData, validateVSMData } from '../utils/validation/vsmValidat
 import { autoPositionStep } from '../utils/ui/autoPositionStep.js'
 import { vsmLocalStorageRepo } from '../infrastructure/VsmLocalStorageRepository.js'
 import { vsmUIStore } from './vsmUIStore.svelte.js'
-/**
- * @typedef {import('../types/index.js').Step} Step
- * @typedef {import('../types/index.js').Connection} Connection
- * @typedef {import('../types/index.js').ValueStreamMap} ValueStreamMap
- */
 
-/**
- * Create the VSM data store
- * @param {Object} [repository] - Persistence repository (default: vsmLocalStorageRepo)
- * @returns {Object} VSM data store with reactive state and actions
- */
-function createVsmDataStore(repository = vsmLocalStorageRepo) {
-  const initialState = {
-    id: null,
-    name: '',
-    description: '',
-    steps: [],
-    connections: [],
-    createdAt: null,
-    updatedAt: null,
-    readinessOverrides: {},
-    dora: emptyDora(),
-    annotations: [],
+// Hàm tạo ID an toàn (Không bị crash trên môi trường HTTP/Local IP)
+function generateId() {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return 'map-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 9);
+}
+
+function createVsmDataStore() {
+  const defaultState = {
+    id: null, name: 'Untitled Map', description: '', steps: [], connections: [],
+    createdAt: null, updatedAt: null, readinessOverrides: {}, dora: emptyDora(),
+    annotations: [], baseline: null
+  };
+
+  // 1. TẢI WORKSPACE TỪ LOCALSTORAGE
+  let workspaceJson;
+  try { workspaceJson = localStorage.getItem('vsm-workspace'); } catch(e) {}
+  let workspace = workspaceJson ? JSON.parse(workspaceJson) : null;
+
+  if (!workspace || !workspace.maps) {
+    let legacyJson;
+    try { legacyJson = localStorage.getItem('vsm-data'); } catch(e) {}
+    
+    if (legacyJson) {
+      const legacyData = sanitizeVSMData(JSON.parse(legacyJson));
+      workspace = {
+        maps: { [legacyData.id]: legacyData },
+        openTabs: [legacyData.id],
+        activeTabId: legacyData.id
+      };
+    } else {
+      workspace = { maps: {}, openTabs: [], activeTabId: null };
+    }
   }
 
-  // Load persisted state; sanitize on read and validate to catch corrupted localStorage
-  const rawPersisted = repository.load(initialState, sanitizeVSMData)
-  const persistedValidation = validateVSMData(rawPersisted)
-  const persisted = persistedValidation.valid ? rawPersisted : initialState
+  let maps = $state(workspace.maps || {});
+  let openTabs = $state(workspace.openTabs || []);
+  let activeTabId = $state(workspace.activeTabId || null);
 
-  // Reactive state using Svelte 5 $state rune
-  let id = $state(persisted.id)
-  let name = $state(persisted.name)
-  let description = $state(persisted.description)
-  let steps = $state(persisted.steps)
-  let connections = $state(persisted.connections)
-  let createdAt = $state(persisted.createdAt)
-  let updatedAt = $state(persisted.updatedAt)
-  // User confirm/override decisions for the CD readiness scorecard, keyed by item id
-  let readinessOverrides = $state(persisted.readinessOverrides || {})
-  // DORA metrics for this map (P1c)
-  let dora = $state(persisted.dora || emptyDora())
-  // Kaizen-burst improvement annotations for this map
-  let annotations = $state(persisted.annotations || [])
-  // Captured baseline (current-state) snapshot for future-state comparison
-  let baseline = $state(persisted.baseline || null)
+  let activeData = maps[activeTabId] ? sanitizeVSMData(maps[activeTabId]) : { ...defaultState };
 
-  // Cached metrics — only recomputed when steps or connections change
-  let cachedMetrics = $derived(calculateMetrics(steps, connections))
+  let id = $state(activeData.id);
+  let name = $state(activeData.name);
+  let description = $state(activeData.description);
+  let steps = $state(activeData.steps);
+  let connections = $state(activeData.connections);
+  let createdAt = $state(activeData.createdAt);
+  let updatedAt = $state(activeData.updatedAt);
+  let readinessOverrides = $state(activeData.readinessOverrides || {});
+  let dora = $state(activeData.dora || emptyDora());
+  let annotations = $state(activeData.annotations || []);
+  let baseline = $state(activeData.baseline || null);
 
-  // CD readiness scorecard — recomputed when steps, connections, or overrides change
-  let cachedCdReadiness = $derived(
-    calculateCdReadiness(steps, connections, readinessOverrides)
-  )
+  let cachedMetrics = $derived(calculateMetrics(steps, connections));
+  let cachedCdReadiness = $derived(calculateCdReadiness(steps, connections, readinessOverrides));
 
-  // Persist current state via repository
+  function syncActiveToMaps() {
+    if (!id) return;
+    maps[id] = {
+      id, name, description, 
+      steps: $state.snapshot(steps), 
+      connections: $state.snapshot(connections),
+      createdAt, updatedAt, 
+      readinessOverrides: $state.snapshot(readinessOverrides),
+      dora: $state.snapshot(dora), 
+      annotations: $state.snapshot(annotations), 
+      baseline: $state.snapshot(baseline)
+    };
+  }
+
   function persist() {
-    repository.save({
-      id,
-      name,
-      description,
-      steps,
-      connections,
-      createdAt,
-      updatedAt,
-      readinessOverrides,
-      dora,
-      annotations,
-      baseline,
-    })
+    if (id) syncActiveToMaps();
+    try {
+      localStorage.setItem('vsm-workspace', JSON.stringify({
+        maps: $state.snapshot(maps),
+        openTabs: $state.snapshot(openTabs),
+        activeTabId: id
+      }));
+    } catch(e) { console.error('Failed to save workspace', e) }
+  }
+
+  function loadIntoActive(mapData) {
+    const safe = sanitizeVSMData(mapData);
+    id = safe.id; name = safe.name; description = safe.description;
+    steps = safe.steps; connections = safe.connections;
+    createdAt = safe.createdAt; updatedAt = safe.updatedAt;
+    readinessOverrides = safe.readinessOverrides || {};
+    dora = safe.dora || emptyDora(); annotations = safe.annotations || [];
+    baseline = safe.baseline || null;
   }
 
   function aggregateSubprocesses() {
-    const verticalConns = connections.filter(c => c.type === 'vertical')
-    const horizontalConns = connections.filter(c => c.type !== 'vertical')
+    const verticalConns = connections.filter(c => c.type === 'vertical');
+    const horizontalConns = connections.filter(c => c.type !== 'vertical');
 
-    // Nếu không có bất kỳ kết nối dọc nào trên Canvas, xóa hết quan hệ Cha-Con
     if (verticalConns.length === 0) {
-      steps = steps.map(s => ({ ...s, isSubProcess: false, parentId: null }))
-      return
+      steps = steps.map(s => ({ ...s, isSubProcess: false, parentId: null }));
+      return;
     }
 
-    // 1. Tìm các block thuộc luồng chính (có kết nối ngang)
-    const hasHorizontal = new Set()
-    horizontalConns.forEach(c => {
-      hasHorizontal.add(c.source)
-      hasHorizontal.add(c.target)
-    })
+    const hasHorizontal = new Set();
+    horizontalConns.forEach(c => { hasHorizontal.add(c.source); hasHorizontal.add(c.target); });
 
-    // 2. Tạo danh sách kề (đồ thị không hướng) để không phụ thuộc vào chiều vẽ mũi tên
-    const adj = {}
+    const adj = {};
     verticalConns.forEach(c => {
-      if (!adj[c.source]) adj[c.source] = []
-      if (!adj[c.target]) adj[c.target] = []
-      adj[c.source].push(c.target)
-      adj[c.target].push(c.source)
-    })
+      if (!adj[c.source]) adj[c.source] = [];
+      if (!adj[c.target]) adj[c.target] = [];
+      adj[c.source].push(c.target);
+      adj[c.target].push(c.source);
+    });
 
-    // 3. Cha là những block vừa nằm trên luồng chính, vừa có kết nối dọc
-    const roots = Object.keys(adj).filter(id => hasHorizontal.has(id))
-
-    // 4. MẶC ĐỊNH XÓA TOÀN BỘ QUAN HỆ CHA-CON CŨ (Bắt buộc phải có parentId: null)
-    let newSteps = steps.map(s => ({ ...s, isSubProcess: false, parentId: null }))
+    const roots = Object.keys(adj).filter(id => hasHorizontal.has(id));
+    let newSteps = steps.map(s => ({ ...s, isSubProcess: false, parentId: null }));
 
     roots.forEach(rootId => {
-      const visited = new Set([rootId])
-      const queue = [rootId]
+      const visited = new Set([rootId]);
+      const queue = [rootId];
 
-      // Duyệt đồ thị để tìm tất cả các block con/cháu
       while (queue.length > 0) {
-        const current = queue.shift()
+        const current = queue.shift();
         if (adj[current]) {
           adj[current].forEach(neighbor => {
-            // Chỉ đi xuống các block con, không đi ngược sang block chính khác
             if (!visited.has(neighbor) && !hasHorizontal.has(neighbor)) {
-              visited.add(neighbor)
-              queue.push(neighbor)
-              
-              // Gắn cờ và parentId MỚI cho block con
-              const childIndex = newSteps.findIndex(s => s.id === neighbor)
+              visited.add(neighbor);
+              queue.push(neighbor);
+              const childIndex = newSteps.findIndex(s => s.id === neighbor);
               if (childIndex !== -1) {
-                newSteps[childIndex] = { ...newSteps[childIndex], isSubProcess: true, parentId: rootId }
+                newSteps[childIndex] = { ...newSteps[childIndex], isSubProcess: true, parentId: rootId };
               }
             }
-          })
+          });
         }
       }
-      
-      // ĐÃ XÓA BỎ HOÀN TOÀN ĐOẠN TÍNH TỔNG VÀ GHI ĐÈ QUEUE SIZE.
-      // Block cha giờ đây sẽ giữ nguyên mọi thông số do người dùng tự nhập ban đầu!
-    })
-
-    // 5. LUÔN LUÔN CẬP NHẬT LẠI STEPS ĐỂ GHI NHẬN SỰ THAY ĐỔI CẤU TRÚC
-    steps = newSteps
+    });
+    steps = newSteps;
   }
 
   return {
-    // Reactive getters
-    get id() {
-      return id
-    },
-    get name() {
-      return name
-    },
-    get description() {
-      return description
-    },
-    get steps() {
-      return [...steps]
-    },
-    get connections() {
-      return [...connections]
-    },
-    get createdAt() {
-      return createdAt
-    },
-    get updatedAt() {
-      return updatedAt
+    get maps() { return maps },
+    get openTabs() { return [...openTabs] },
+    get id() { return id },
+    get name() { return name },
+    get description() { return description },
+    get steps() { return [...steps] },
+    get connections() { return [...connections] },
+    get createdAt() { return createdAt },
+    get updatedAt() { return updatedAt },
+    get metrics() { return cachedMetrics },
+    get cdReadiness() { return cachedCdReadiness },
+    get readinessOverrides() { return readinessOverrides },
+    get dora() { return dora },
+    get annotations() { return [...annotations] },
+    get baseline() { return baseline },
+
+    openMapInTab(mapId) {
+      if (!maps[mapId]) return;
+      if (id) syncActiveToMaps();
+      if (!openTabs.includes(mapId)) openTabs = [...openTabs, mapId];
+      loadIntoActive(maps[mapId]);
+      persist();
+      vsmUIStore.closeWelcomeScreen();
     },
 
-    // Derived metrics — cached via $derived, only recomputed when steps/connections change
-    get metrics() {
-      return cachedMetrics
-    },
-
-    // Derived CD readiness scorecard (13 items)
-    get cdReadiness() {
-      return cachedCdReadiness
-    },
-
-    // User confirm/override decisions for the readiness scorecard
-    get readinessOverrides() {
-      return readinessOverrides
-    },
-
-    // DORA metrics for this map
-    get dora() {
-      return dora
-    },
-
-    // Kaizen-burst improvement annotations
-    get annotations() {
-      return [...annotations]
-    },
-
-    // Captured baseline snapshot for current-vs-future-state comparison
-    get baseline() {
-      return baseline
-    },
-
-    // Map-level Actions
-    createNewMap(mapName) {
-      const now = new Date().toISOString()
-      id = crypto.randomUUID()
-      name = mapName
-      description = ''
-      steps = []
-      connections = []
-      createdAt = now
-      updatedAt = now
-      readinessOverrides = {}
-      dora = emptyDora()
-      annotations = []
-      baseline = null
-      persist()
-      vsmUIStore.closeWelcomeScreen() // MỚI THÊM: Đóng Trang chủ sau khi tạo map mới
-    },
-
-    // Capture the live map as the baseline (current state) for comparison
-    captureBaseline() {
-      baseline = {
-        steps: steps.map((s) => ({ ...s })),
-        connections: connections.map((c) => ({ ...c })),
-        capturedAt: new Date().toISOString(),
+    closeTab(targetId) {
+      openTabs = openTabs.filter(t => t !== targetId);
+      if (id === targetId) {
+        if (openTabs.length > 0) {
+          const nextId = openTabs[openTabs.length - 1];
+          loadIntoActive(maps[nextId]);
+        } else {
+          id = null;
+          vsmUIStore.openWelcomeScreen();
+        }
       }
-      persist()
+      persist();
     },
 
-    clearBaseline() {
-      baseline = null
-      persist()
+    deleteMap(targetId) {
+      openTabs = openTabs.filter(t => t !== targetId);
+      const newMaps = { ...maps };
+      delete newMaps[targetId];
+      maps = newMaps;
+      
+      if (id === targetId) {
+        if (openTabs.length > 0) {
+          const nextId = openTabs[openTabs.length - 1];
+          loadIntoActive(maps[nextId]);
+        } else {
+          id = null;
+          vsmUIStore.openWelcomeScreen();
+        }
+      }
+      persist();
     },
 
-    updateMapName(newName) {
-      name = newName
-      updatedAt = new Date().toISOString()
-      persist()
-    },
+    createNewMap(mapName = 'Untitled Map') {
+      if (id) syncActiveToMaps();
+      const now = new Date().toISOString();
+      const newId = generateId(); // Đã thay thế crypto.randomUUID
 
-    updateMapDescription(newDescription) {
-      description = newDescription
-      updatedAt = new Date().toISOString()
-      persist()
+      id = newId; name = mapName; description = ''; steps = []; connections = [];
+      createdAt = now; updatedAt = now; readinessOverrides = {};
+      dora = emptyDora(); annotations = []; baseline = null;
+
+      openTabs = [...openTabs, newId];
+      syncActiveToMaps();
+      persist();
+      vsmUIStore.closeWelcomeScreen();
     },
 
     loadMap(mapData) {
-      const safe = sanitizeVSMData(mapData)
-      const validation = validateVSMData(safe)
-      if (!validation.valid) {
-        console.warn('loadMap: data failed validation, loading with safe defaults', validation.errors)
-      }
-      id = safe.id
-      name = safe.name
-      description = safe.description
-      steps = safe.steps
-      connections = safe.connections
-      createdAt = safe.createdAt
-      updatedAt = safe.updatedAt
-      readinessOverrides = safe.readinessOverrides || {}
-      dora = safe.dora || emptyDora()
-      annotations = safe.annotations || []
-      baseline = safe.baseline || null
-      persist()
-      vsmUIStore.closeWelcomeScreen() // MỚI THÊM: Đóng Trang chủ sau khi tải map/template
-    },
-
-    clearMap() {
-      id = null
-      name = ''
-      description = ''
-      steps = []
-      connections = []
-      createdAt = null
-      updatedAt = null
-      readinessOverrides = {}
-      dora = emptyDora()
-      annotations = []
-      baseline = null
-      persist()
-    },
-
-    // Update this map's DORA metrics (P1c)
-    setDora(updates) {
-      dora = { ...dora, ...updates }
-      updatedAt = new Date().toISOString()
-      persist()
-    },
-
-    // Kaizen-burst annotation CRUD (per-map improvement backlog)
-    addAnnotation(targetType, targetId, wasteType, note = '') {
-      const annotation = createAnnotation(targetType, targetId, wasteType, note)
-      annotations = [...annotations, annotation]
-      updatedAt = new Date().toISOString()
-      persist()
-      return annotation
-    },
-
-    updateAnnotation(annotationId, updates) {
-      annotations = annotations.map((a) => (a.id === annotationId ? { ...a, ...updates } : a))
-      updatedAt = new Date().toISOString()
-      persist()
-    },
-
-    removeAnnotation(annotationId) {
-      annotations = annotations.filter((a) => a.id !== annotationId)
-      updatedAt = new Date().toISOString()
-      persist()
-    },
-
-    // CD readiness confirm/override/reset (per-map, never mutates steps)
-    setReadinessOverride(itemId, status) {
-      readinessOverrides = { ...readinessOverrides, [itemId]: status }
-      persist()
-    },
-
-    confirmReadiness(itemId) {
-      readinessOverrides = { ...readinessOverrides, [itemId]: 'confirmed' }
-      persist()
-    },
-
-    resetReadiness(itemId) {
-      const next = { ...readinessOverrides }
-      delete next[itemId]
-      readinessOverrides = next
-      persist()
-    },
-
-    // Step CRUD
-    addStep(stepName = 'New Step', overrides = {}) {
-      const position = overrides.position || autoPositionStep(steps.length)
-      const newStep = createStep(stepName, { ...overrides, position })
-      steps = [...steps, newStep]
-      updatedAt = new Date().toISOString()
-      persist()
-      return newStep
-    },
-
-    updateStep(stepId, updates) {
-      steps = steps.map((step) =>
-        step.id === stepId ? { ...step, ...updates } : step
-      )
-      aggregateSubprocesses()
-      updatedAt = new Date().toISOString()
-      persist()
-    },
-
-    deleteStep(stepId) {
-      const removedConnectionIds = connections
-        .filter((conn) => conn.source === stepId || conn.target === stepId)
-        .map((conn) => conn.id)
-      steps = steps.filter((step) => step.id !== stepId)
-      connections = connections.filter(
-        (conn) => conn.source !== stepId && conn.target !== stepId
-      )
-      // Prune annotations targeting the removed step or its connections
-      annotations = annotations.filter(
-        (a) =>
-          !(a.targetType === 'step' && a.targetId === stepId) &&
-          !(a.targetType === 'connection' && removedConnectionIds.includes(a.targetId))
-      )
-      aggregateSubprocesses()
-      updatedAt = new Date().toISOString()
-      persist()
-    },
-
-    updateStepPosition(stepId, position) {
-      steps = steps.map((step) =>
-        step.id === stepId ? { ...step, position } : step
-      )
-      // Don't update updatedAt for position-only changes (drag operations)
-      persist()
-    },
-
-    // Connection CRUD
-    // BỔ SUNG tham số sourceHandle và targetHandle
-    addConnection(source, target, type = 'forward', reworkRate = 0, sourceHandle = 'right', targetHandle = 'left') {
-      const existingConnection = connections.find(
-        (c) => c.source === source && c.target === target
-      )
-      if (existingConnection) return null
-
-      const newConnection = createConnection(source, target, type, reworkRate)
-      // Lưu lại vị trí chấm tròn
-      newConnection.sourceHandle = sourceHandle
-      newConnection.targetHandle = targetHandle
+      if (id) syncActiveToMaps();
+      const safe = sanitizeVSMData(mapData);
+      safe.id = generateId(); // Đã thay thế crypto.randomUUID
       
-      connections = [...connections, newConnection]
-      aggregateSubprocesses() // Vẫn giữ nguyên lệnh gọi này
-      updatedAt = new Date().toISOString()
-      persist()
-      return newConnection
+      loadIntoActive(safe);
+      if (!openTabs.includes(safe.id)) openTabs = [...openTabs, safe.id];
+      
+      syncActiveToMaps();
+      persist();
+      vsmUIStore.closeWelcomeScreen();
     },
 
-    updateConnection(connectionId, updates) {
-      connections = connections.map((conn) =>
-        conn.id === connectionId ? { ...conn, ...updates } : conn
-      )
-      updatedAt = new Date().toISOString()
-      persist()
-    },
+    captureBaseline() { baseline = { steps: steps.map((s) => ({ ...s })), connections: connections.map((c) => ({ ...c })), capturedAt: new Date().toISOString() }; persist() },
+    clearBaseline() { baseline = null; persist() },
+    updateMapName(newName) { name = newName; updatedAt = new Date().toISOString(); persist() },
+    updateMapDescription(newDescription) { description = newDescription; updatedAt = new Date().toISOString(); persist() },
+    clearMap() { id = null; name = ''; description = ''; steps = []; connections = []; createdAt = null; updatedAt = null; readinessOverrides = {}; dora = emptyDora(); annotations = []; baseline = null; persist() },
+    setDora(updates) { dora = { ...dora, ...updates }; updatedAt = new Date().toISOString(); persist() },
+    addAnnotation(targetType, targetId, wasteType, note = '') { const annotation = createAnnotation(targetType, targetId, wasteType, note); annotations = [...annotations, annotation]; updatedAt = new Date().toISOString(); persist(); return annotation },
+    updateAnnotation(annotationId, updates) { annotations = annotations.map((a) => (a.id === annotationId ? { ...a, ...updates } : a)); updatedAt = new Date().toISOString(); persist() },
+    removeAnnotation(annotationId) { annotations = annotations.filter((a) => a.id !== annotationId); updatedAt = new Date().toISOString(); persist() },
+    setReadinessOverride(itemId, status) { readinessOverrides = { ...readinessOverrides, [itemId]: status }; persist() },
+    confirmReadiness(itemId) { readinessOverrides = { ...readinessOverrides, [itemId]: 'confirmed' }; persist() },
+    resetReadiness(itemId) { const next = { ...readinessOverrides }; delete next[itemId]; readinessOverrides = next; persist() },
 
-    deleteConnection(connectionId) {
-      connections = connections.filter((conn) => conn.id !== connectionId)
-      annotations = annotations.filter(
-        (a) => !(a.targetType === 'connection' && a.targetId === connectionId)
-      )
-      aggregateSubprocesses()
-      updatedAt = new Date().toISOString()
-      persist()
-    },
-
-    /**
-     * Restore a snapshot of steps and connections (used by undo/redo).
-     * Bulk-assigns state fields and persists.
-     * @param {{ steps: Array, connections: Array }} snapshot
-     */
-    restoreSnapshot(snapshot) {
-      steps = snapshot.steps.map((s) => ({ ...s }))
-      connections = snapshot.connections.map((c) => ({ ...c }))
-      updatedAt = new Date().toISOString()
-      persist()
-    },
-
-    // Get step by ID helper — returns shallow copy to prevent untracked mutations
-    getStepById(stepId) {
-      const step = steps.find((s) => s.id === stepId)
-      return step ? { ...step } : null
-    },
-
-    // Get connection by ID helper — returns shallow copy to prevent untracked mutations
-    getConnectionById(connectionId) {
-      const conn = connections.find((c) => c.id === connectionId)
-      return conn ? { ...conn } : null
-    },
+    addStep(stepName = 'New Step', overrides = {}) { const position = overrides.position || autoPositionStep(steps.length); const newStep = createStep(stepName, { ...overrides, position }); steps = [...steps, newStep]; updatedAt = new Date().toISOString(); persist(); return newStep },
+    updateStep(stepId, updates) { steps = steps.map((step) => step.id === stepId ? { ...step, ...updates } : step); aggregateSubprocesses(); updatedAt = new Date().toISOString(); persist() },
+    deleteStep(stepId) { const removedConnectionIds = connections.filter((conn) => conn.source === stepId || conn.target === stepId).map((conn) => conn.id); steps = steps.filter((step) => step.id !== stepId); connections = connections.filter((conn) => conn.source !== stepId && conn.target !== stepId); annotations = annotations.filter((a) => !(a.targetType === 'step' && a.targetId === stepId) && !(a.targetType === 'connection' && removedConnectionIds.includes(a.targetId))); aggregateSubprocesses(); updatedAt = new Date().toISOString(); persist() },
+    updateStepPosition(stepId, position) { steps = steps.map((step) => step.id === stepId ? { ...step, position } : step); persist() },
+    addConnection(source, target, type = 'forward', reworkRate = 0, sourceHandle = 'right', targetHandle = 'left') { const existingConnection = connections.find((c) => c.source === source && c.target === target); if (existingConnection) return null; const newConnection = createConnection(source, target, type, reworkRate); newConnection.sourceHandle = sourceHandle; newConnection.targetHandle = targetHandle; connections = [...connections, newConnection]; aggregateSubprocesses(); updatedAt = new Date().toISOString(); persist(); return newConnection },
+    updateConnection(connectionId, updates) { connections = connections.map((conn) => conn.id === connectionId ? { ...conn, ...updates } : conn); updatedAt = new Date().toISOString(); persist() },
+    deleteConnection(connectionId) { connections = connections.filter((conn) => conn.id !== connectionId); annotations = annotations.filter((a) => !(a.targetType === 'connection' && a.targetId === connectionId)); aggregateSubprocesses(); updatedAt = new Date().toISOString(); persist() },
+    restoreSnapshot(snapshot) { steps = snapshot.steps.map((s) => ({ ...s })); connections = snapshot.connections.map((c) => ({ ...c })); updatedAt = new Date().toISOString(); persist() },
+    getStepById(stepId) { const step = steps.find((s) => s.id === stepId); return step ? { ...step } : null },
+    getConnectionById(connectionId) { const conn = connections.find((c) => c.id === connectionId); return conn ? { ...conn } : null },
   }
 }
 
-// Export singleton instance
 export const vsmDataStore = createVsmDataStore()
-
-// Selector for metrics (for compatibility)
 export const selectMetrics = () => vsmDataStore.metrics
