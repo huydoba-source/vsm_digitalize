@@ -71,16 +71,18 @@
 <div class="min-h-screen bg-gray-50/50 p-6 sm:p-12 flex flex-col items-center">
   <div class="mb-10 text-center">
     <div class="flex justify-center mb-4">
-      <svg viewBox="0 0 100 100" class="w-16 h-16" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M50 10 L90 30 L90 70 L50 90 L10 70 L10 30 Z" fill="#004C97" />
-        <path d="M50 25 L75 38 L75 62 L50 75 L25 62 L25 38 Z" fill="#FFFFFF" />
-        <path d="M50 35 L65 42 L65 58 L50 65 L35 58 L35 42 Z" fill="#004C97" />
-      </svg>
+      <!-- Đã thay thế bằng Decathlon Symbol -->
+      <img 
+        src="https://logos-world.net/wp-content/uploads/2020/01/Decathlon-Symbol.png" 
+        alt="Decathlon Symbol" 
+        class="h-16 w-auto object-contain" 
+      />
     </div>
-    <h1 class="text-3xl font-bold text-gray-900 mb-2">Decathlon VSM</h1>
+    <!-- Đã đổi màu chữ thành màu xanh Decathlon -->
+    <h1 class="text-3xl font-bold text-[#3643ba] mb-2">Decathlon VSM</h1>
     <p class="text-gray-500 max-w-lg mx-auto">Value Stream & Flow Optimization</p>
     <p class="text-sm text-gray-400 mt-2 max-w-md mx-auto">
-      Map your software delivery value streams, find bottlenecks, and optimize lead time.
+      Map your delivery value streams, break through bottlenecks, and sprint to the finish line.
     </p>
   </div>
 

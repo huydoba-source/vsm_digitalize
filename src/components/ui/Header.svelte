@@ -171,15 +171,19 @@
 
       <button 
         onclick={goHome}
-        class="flex items-center gap-2 hover:opacity-80 transition-opacity focus:outline-none focus:ring-2 focus:ring-blue-500"
+        class="group flex items-center gap-2 p-1 -ml-1 hover:bg-gray-100 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
         title="Go to Dashboard"
       >
-        <svg viewBox="0 0 100 100" class="w-8 h-8" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M50 10 L90 30 L90 70 L50 90 L10 70 L10 30 Z" fill="#004C97" />
-          <path d="M50 25 L75 38 L75 62 L50 75 L25 62 L25 38 Z" fill="#FFFFFF" />
-          <path d="M50 35 L65 42 L65 58 L50 65 L35 58 L35 42 Z" fill="#004C97" />
-        </svg>
-        <span class="font-bold text-xl text-[#004C97] hidden sm:inline">VSM</span>
+        <!-- Logo phóng to nhẹ (scale-105) khi rê chuột vào group -->
+        <img 
+          src="https://i.logos-download.com/8838/2046-05803472c5828be1066b786bd79c64c8.png/Decathlon_Logo_2024.png" 
+          alt="Decathlon" 
+          class="h-6 w-auto transition-transform duration-200 group-hover:scale-105" 
+        />
+        <!-- Chữ VSM mặc định màu #0082C3, hover chuyển sang #3643ba -->
+        <span class="font-bold text-xl text-[#0082C3] group-hover:text-[#3643ba] transition-colors hidden sm:inline">
+          VSM
+        </span>
       </button>
 
       <div class="h-6 w-px bg-gray-300 hidden sm:block"></div>
