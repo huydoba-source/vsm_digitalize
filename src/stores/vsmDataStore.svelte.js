@@ -116,13 +116,12 @@ function createVsmDataStore(repository = vsmLocalStorageRepo) {
     // 3. Cha là những block vừa nằm trên luồng chính, vừa có kết nối dọc
     const roots = Object.keys(adj).filter(id => hasHorizontal.has(id))
 
-    // Tạo mảng clone mới, MẶC ĐỊNH xóa toàn bộ quan hệ Cha-Con cũ
+    // 4. MẶC ĐỊNH XÓA TOÀN BỘ QUAN HỆ CHA-CON CŨ (Bắt buộc phải có parentId: null)
     let newSteps = steps.map(s => ({ ...s, isSubProcess: false, parentId: null }))
 
     roots.forEach(rootId => {
       const visited = new Set([rootId])
       const queue = [rootId]
-      const descendants = []
 
       // Duyệt đồ thị để tìm tất cả các block con/cháu
       while (queue.length > 0) {
@@ -133,7 +132,6 @@ function createVsmDataStore(repository = vsmLocalStorageRepo) {
             if (!visited.has(neighbor) && !hasHorizontal.has(neighbor)) {
               visited.add(neighbor)
               queue.push(neighbor)
-              descendants.push(neighbor)
               
               // Gắn cờ và parentId MỚI cho block con
               const childIndex = newSteps.findIndex(s => s.id === neighbor)
@@ -144,29 +142,12 @@ function createVsmDataStore(repository = vsmLocalStorageRepo) {
           })
         }
       }
-
-      if (descendants.length === 0) return
-
-      // Tính tổng Queue Size của các con
-      let totalQueue = 0
-      descendants.forEach(id => {
-        const childNode = newSteps.find(s => s.id === id)
-        if (childNode) {
-          totalQueue += Number(childNode.queueSize) || 0
-        }
-      })
-
-      // Chỉ ghi đè Queue Size cho Block Cha
-      const parentIndex = newSteps.findIndex(s => s.id === rootId)
-      if (parentIndex !== -1) {
-        newSteps[parentIndex] = {
-          ...newSteps[parentIndex],
-          queueSize: totalQueue
-        }
-      }
+      
+      // ĐÃ XÓA BỎ HOÀN TOÀN ĐOẠN TÍNH TỔNG VÀ GHI ĐÈ QUEUE SIZE.
+      // Block cha giờ đây sẽ giữ nguyên mọi thông số do người dùng tự nhập ban đầu!
     })
 
-    // LUÔN LUÔN CẬP NHẬT LẠI STEPS ĐỂ GHI NHẬN SỰ THAY ĐỔI CẤU TRÚC (KỂ CẢ KHI XÓA MŨI TÊN)
+    // 5. LUÔN LUÔN CẬP NHẬT LẠI STEPS ĐỂ GHI NHẬN SỰ THAY ĐỔI CẤU TRÚC
     steps = newSteps
   }
 

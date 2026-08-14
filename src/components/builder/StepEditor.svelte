@@ -274,6 +274,10 @@
             class="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 {errors.queueSize ? 'border-red-500' : 'border-gray-300'}"
             data-testid="queue-size-input"
           />
+          <!-- BỔ SUNG: Hiển thị dòng chữ cảnh báo lỗi -->
+          {#if errors.queueSize}
+            <p class="mt-1 text-xs text-red-500">{errors.queueSize}</p>
+          {/if}
         </div>
 
         <div>

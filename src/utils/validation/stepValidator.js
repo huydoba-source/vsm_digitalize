@@ -109,10 +109,12 @@ export function validateStep(stepData, parentStep = null, allSteps = []) {
   }
 
   // BỔ SUNG: RÀNG BUỘC CHO BLOCK CON (Tính tổng) DỰA TRÊN BLOCK CHA
+  // BỔ SUNG: RÀNG BUỘC CHO BLOCK CON (Tính tổng) DỰA TRÊN BLOCK CHA
   if (parentStep) {
     let otherChildrenPT = 0;
     let otherChildrenLT = 0;
     let otherChildrenCA = 1;
+    let otherChildrenQueue = 0; // Khai báo biến đếm tổng Queue
 
     // Tính tổng của các block con KHÁC (không tính block đang edit)
     if (Array.isArray(allSteps) && allSteps.length > 0) {
@@ -121,12 +123,14 @@ export function validateStep(stepData, parentStep = null, allSteps = []) {
         otherChildrenPT += Number(child.processTime) || 0;
         otherChildrenLT += Number(child.leadTime) || 0;
         otherChildrenCA *= (Number(child.percentCompleteAccurate) || 100) / 100;
+        otherChildrenQueue += Number(child.queueSize) || 0; // Cộng dồn Queue
       });
     }
 
     const totalNewPT = otherChildrenPT + processTime;
     const totalNewLT = otherChildrenLT + leadTime;
     const totalNewCA = Math.round(otherChildrenCA * (pca / 100) * 100);
+    const totalNewQueue = otherChildrenQueue + queueSize; // Tính tổng Queue mới
 
     if (totalNewPT > parentStep.processTime) {
       errors.processTime = `Total PT of child steps (${totalNewPT} min) exceeds parent step (${parentStep.processTime} min)`;
@@ -136,6 +140,10 @@ export function validateStep(stepData, parentStep = null, allSteps = []) {
     }
     if (totalNewCA < parentStep.percentCompleteAccurate) {
       errors.percentCompleteAccurate = `Total %C&A of child steps (${totalNewCA}%) must >= parent step (${parentStep.percentCompleteAccurate}%)`;
+    }
+    // So sánh và báo lỗi Queue
+    if (totalNewQueue > parentStep.queueSize) {
+      errors.queueSize = `Total Queue of child steps (${totalNewQueue}) exceeds parent step (${parentStep.queueSize})`;
     }
   }
 
