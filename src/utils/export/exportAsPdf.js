@@ -5,22 +5,18 @@ const PDF_ORIENTATION = 'landscape'
 
 /**
  * Sanitize filename for safe download
- * @param {string} filename - Original filename
- * @returns {string} Sanitized filename
  */
 function sanitizeFilename(filename) {
   if (!filename || typeof filename !== 'string') {
     return 'download.pdf'
   }
 
-  // Remove or replace unsafe characters
   const sanitized = filename
     .replace(/[^a-z0-9.-]/gi, '_')
-    .replace(/^\.+/, '') // Remove leading dots
-    .replace(/\.+$/, '') // Remove trailing dots
-    .substring(0, 255) // Limit length
+    .replace(/^\.+/, '')
+    .replace(/\.+$/, '')
+    .substring(0, 255)
 
-  // Ensure it has .pdf extension
   if (!sanitized.endsWith('.pdf')) {
     return sanitized.replace(/\.[^.]*$/, '') + '.pdf'
   }
@@ -28,12 +24,19 @@ function sanitizeFilename(filename) {
   return sanitized || 'download.pdf'
 }
 
+// BỔ SUNG: Hàm lọc để loại bỏ các nút điều khiển và Minimap khi xuất PDF
+const filterNodes = (node) => {
+  if (node?.classList) {
+    const excludeClasses = ['svelte-flow__minimap', 'svelte-flow__controls', 'svelte-flow__panel'];
+    if (excludeClasses.some(c => node.classList.contains(c))) {
+      return false;
+    }
+  }
+  return true;
+};
+
 /**
  * Export canvas element as PDF file
- * @param {HTMLElement} element - DOM element to capture
- * @param {string} filename - Name for the downloaded file
- * @param {Object} options - Additional options for image generation
- * @returns {Promise<void>}
  */
 export async function exportAsPdf(
   element,
@@ -46,7 +49,9 @@ export async function exportAsPdf(
 
   const safeFilename = sanitizeFilename(filename)
   const defaultOptions = {
-    backgroundColor: '#f3f4f6',
+    backgroundColor: '#ffffff', // BỔ SUNG: Chuyển nền thành màu trắng
+    filter: filterNodes,        // BỔ SUNG: Gọi hàm lọc Minimap
+    pixelRatio: 2,              // BỔ SUNG: Tăng độ sắc nét
     quality: 1,
     ...options,
   }

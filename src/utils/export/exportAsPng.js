@@ -10,14 +10,12 @@ function sanitizeFilename(filename) {
     return 'download.png'
   }
 
-  // Remove or replace unsafe characters
   const sanitized = filename
     .replace(/[^a-z0-9.-]/gi, '_')
-    .replace(/^\.+/, '') // Remove leading dots
-    .replace(/\.+$/, '') // Remove trailing dots
-    .substring(0, 255) // Limit length
+    .replace(/^\.+/, '')
+    .replace(/\.+$/, '')
+    .substring(0, 255)
 
-  // Ensure it has an extension
   if (!sanitized.includes('.')) {
     return sanitized + '.png'
   }
@@ -25,12 +23,19 @@ function sanitizeFilename(filename) {
   return sanitized || 'download.png'
 }
 
+// BỔ SUNG: Hàm lọc để loại bỏ các nút điều khiển và Minimap khi xuất ảnh
+const filterNodes = (node) => {
+  if (node?.classList) {
+    const excludeClasses = ['svelte-flow__minimap', 'svelte-flow__controls', 'svelte-flow__panel'];
+    if (excludeClasses.some(c => node.classList.contains(c))) {
+      return false;
+    }
+  }
+  return true;
+};
+
 /**
  * Export canvas element as PNG file
- * @param {HTMLElement} element - DOM element to capture
- * @param {string} filename - Name for the downloaded file
- * @param {Object} options - Additional options for image generation
- * @returns {Promise<void>}
  */
 export async function exportAsPng(
   element,
@@ -43,7 +48,9 @@ export async function exportAsPng(
 
   const safeFilename = sanitizeFilename(filename)
   const defaultOptions = {
-    backgroundColor: '#f3f4f6',
+    backgroundColor: '#ffffff', // BỔ SUNG: Chuyển nền thành màu trắng để hiển thị rõ nhất
+    filter: filterNodes,        // BỔ SUNG: Gọi hàm lọc Minimap
+    pixelRatio: 2,              // BỔ SUNG: Tăng độ sắc nét của ảnh
     quality: 1,
     ...options,
   }

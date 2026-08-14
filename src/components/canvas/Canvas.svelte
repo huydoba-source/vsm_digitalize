@@ -99,33 +99,42 @@
   }
 
   // Derive edges from store
-  let edges = $derived(
-    vsmDataStore.connections.map((conn) => {
-      const isSelected = conn.id === vsmUIStore.selectedConnectionId
-      const isRework = conn.type === 'rework'
-      const isVertical = conn.type === 'vertical'
+  let edges = $derived(
+    vsmDataStore.connections.map((conn) => {
+      const isSelected = conn.id === vsmUIStore.selectedConnectionId
+      const isRework = conn.type === 'rework'
+      const isVertical = conn.type === 'vertical'
 
-      return {
-        id: conn.id,
-        source: conn.source,
-        target: conn.target,
-        // BỔ SUNG: Truyền chính xác ID của Handle
-        sourceHandle: conn.sourceHandle || (isVertical ? 'bottom' : 'right'),
-        targetHandle: conn.targetHandle || (isVertical ? 'top' : 'left'),
-        
-        type: isVertical ? 'straight' : (isRework ? 'rework' : 'smoothstep'),
-        animated: isRework,
-        selected: isSelected,
-        style: {
-          stroke: getEdgeStrokeColor(isSelected, conn.type),
-          strokeWidth: isSelected ? 3 : 2,
-          strokeDasharray: isRework ? '5,5' : (isVertical ? '3,3' : 'none'),
+      return {
+        id: conn.id,
+        source: conn.source,
+        target: conn.target,
+        // BỔ SUNG: Truyền chính xác ID của Handle
+        sourceHandle: conn.sourceHandle || (isVertical ? 'bottom' : 'right'),
+        targetHandle: conn.targetHandle || (isVertical ? 'top' : 'left'),
+        
+        type: isVertical ? 'straight' : (isRework ? 'rework' : 'smoothstep'),
+        animated: isRework,
+        selected: isSelected,
+        style: {
+          stroke: getEdgeStrokeColor(isSelected, conn.type),
+          strokeWidth: isSelected ? 3 : 2,
+          strokeDasharray: isRework ? '5,5' : (isVertical ? '3,3' : 'none'),
+          fill: 'none',
+        },
+
+        markerEnd: {
+          type: 'arrowclosed', 
+          width: 20,
+          height: 20,
+          color: "#9ca3af", 
         },
-        label: conn.type === 'rework' ? `${conn.reworkRate}% rework` : undefined,
-        labelStyle: { fill: conn.type === 'rework' ? '#ef4444' : '#6b7280', fontSize: 10 },
-      }
-    })
-  )
+
+        label: conn.type === 'rework' ? `${conn.reworkRate}% rework` : undefined,
+        labelStyle: { fill: conn.type === 'rework' ? '#ef4444' : '#6b7280', fontSize: 10 },
+      }
+    })
+  ) 
 
   function handleConnect(connection) {
     const { source, target, sourceHandle, targetHandle } = connection
